@@ -11,12 +11,10 @@ const String authVersion = "v5";
 const String deviceVersion = "v5.1";
 const String MyQApplicationId = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu";
 const String baseUrl = "https://api.myqdevice.com/api/";
-const size_t bufferSize = 512;
+const size_t bufferSize = 1024;
 routes_t routes;
-
-//MyQ_account_t MyQ_account;
-//MyQ_devices_t MyQ_devices[10];
-
+extern MyQ_devices_t MyQ_devices[10];				// up to 10 devices
+extern MyQ_account_t MyQ_account;
 
 MyQ::MyQ(String accountId, String username, String password, String securityToken) {
 	_accountId = accountId;
@@ -108,84 +106,91 @@ DynamicJsonDocument MyQ::executeRequest(String route, String method, String data
 	} 
 	else if (method == "GET") {
 		httpResponseCode = https.GET();
-		Serial.print(F("HTTP Response Code: "));
-		Serial.println(httpResponseCode);
 	} 
-	else {
+	else if (method == "PUT") {
 		//return doc["returnCode"] = 32;	// return error, bad method
 	}
 
-	if (httpResponseCode > 0) {
-		
+	if (httpResponseCode > 0) {					// only if using GET or POST (not PUT)
+		StaticJsonDocument<128> filter;
 		if (route == routes.account) {
-			StaticJsonDocument<64> filter;
 			filter["Account"]["Id"] = true;
-			DeserializationError error = deserializeJson(doc, https.getString(),DeserializationOption::Filter(filter));	
+			DeserializationError error = deserializeJson(doc, https.getString(),DeserializationOption::Filter(filter));			// need to filter, JSON returned from getDevices is too large and doesn't work 
 			if (error) {
 				Serial.println(F("ERROR: There was an error while deserializing1"));
 				Serial.println(error.c_str());
 				doc["returnCode"] = 31;
 			}
-			Serial.println(doc.as<String>());
 		}
-		else {
-			DeserializationError error = deserializeJson(doc, https.getString());
+
+		else if (route == routes.getDevices) {
+			filter["count"] = true;
+			filter["items"]["serial_number"] = true;
+			filter["items"]["device_family"] = true;
+			filter["items"]["device_type"] = true;
+			filter["items"]["name"] = true;
+			filter["items"]["state"]["online"] = true;
+			filter["items"]["state"]["door_state"] = true;
+			filter["items"]["state"]["last_update"] = true;
+			filter["items"]["state"]["last_status"] = true;
+
+		}
+	
+		DeserializationError error = deserializeJson(doc, https.getString(),DeserializationOption::Filter(filter));	
 		
-			if (error) {
-				Serial.println(F("ERROR: There was an error while deserializing2"));
-				Serial.println(error.c_str());
-				doc["returnCode"] = 31;
+		if (error) {
+			Serial.println(F("ERROR: There was an error while deserializing"));
+			Serial.println(error.c_str());
+			doc["returnCode"] = 31;
 			} 
-			else {
-				//parseData(doc, route);
-				doc["returnCode"] = 0;
-			}
+		else {
+			//parseData(doc, route);
+			doc["returnCode"] = 0;
+		}
 			//return doc;
 		//} else {
 		//	doc["returnCode"] = 33;
 			// parseBadResponse(httpResponseCode);
 	//	}
-		}
 	}
 	https.end();  // Close connection
-	Serial.println(system_get_free_heap_size());
 	return doc;
 }
 
-//void MyQ::parseData(DynamicJsonDocument doc, String route) {
+void MyQ::parseData(DynamicJsonDocument doc, String route) {
 
-	//if (route == routes.account) {
-		/*MyQ_account.Account_Id = doc["Account"]["Id"];
-		MyQ_account.Account_Name = doc["Account"]["Name"];
-		MyQ_account.Account_Email = doc["Account"]["Email"];
-		MyQ_account.Account_Address_AddressLine1 = doc["Account"]["Address"]["AddressLine1"];
-		MyQ_account.Account_Address_AddressLine2 = doc["Account"]["Address"]["AddressLine2"];
-		MyQ_account.Account_Address_City = doc["Account"]["Address"]["City"];
-		MyQ_account.Account_Address_State = doc["Account"]["Address"]["State"];
-		MyQ_account.Account_Address_PostalCode = doc["Account"]["Address"]["PostalCode"];
-		MyQ_account.Account_Address_Country_Code = doc["Account"]["Address"]["Country"]["Code"];
-		MyQ_account.Account_Address_Country_IsEEACountry = doc["Account"]["Address"]["Country"]["IsEEACountry"];
-		MyQ_account.Account_Phone = doc["Account"]["Phone"];
-		MyQ_account.Account_ContactName = doc["Account"]["ContactName"];
-		MyQ_account.Account_DirectoryCodeLength = doc["Account"]["DirectoryCodeLength"];
-		MyQ_account.Account_UserAllowance = doc["Account"]["UserAllowance"];
-		MyQ_account.Account_TimeZone = doc["Account"]["TimeZone"];
-		MyQ_account.AnalyticsId = doc["AnalyticsId"];
+	if (route == routes.account) {				// commented out unused json items, left them to show what you can get if you need it
+		//MyQ_account.Account_Id = doc["Account"]["Id"];
+		//MyQ_account.Account_Name = doc["Account"]["Name"];
+		//MyQ_account.Account_Email = doc["Account"]["Email"];
+		//MyQ_account.Account_Address_AddressLine1 = doc["Account"]["Address"]["AddressLine1"];
+		//MyQ_account.Account_Address_AddressLine2 = doc["Account"]["Address"]["AddressLine2"];
+		//MyQ_account.Account_Address_City = doc["Account"]["Address"]["City"];
+		//MyQ_account.Account_Address_State = doc["Account"]["Address"]["State"];
+		//MyQ_account.Account_Address_PostalCode = doc["Account"]["Address"]["PostalCode"];
+		//MyQ_account.Account_Address_Country_Code = doc["Account"]["Address"]["Country"]["Code"];
+		//MyQ_account.Account_Address_Country_IsEEACountry = doc["Account"]["Address"]["Country"]["IsEEACountry"];
+		//MyQ_account.Account_Phone = doc["Account"]["Phone"];
+		//MyQ_account.Account_ContactName = doc["Account"]["ContactName"];
+		//MyQ_account.Account_DirectoryCodeLength = doc["Account"]["DirectoryCodeLength"];
+		//MyQ_account.Account_UserAllowance = doc["Account"]["UserAllowance"];
+		//MyQ_account.Account_TimeZone = doc["Account"]["TimeZone"];
+		//MyQ_account.AnalyticsId = doc["AnalyticsId"];
 		MyQ_account.UserId = doc["UserId"];
-		MyQ_account.UserName = doc["UserName"];
-		MyQ_account.Email = doc["Email"];
-		MyQ_account.FirstName = doc["FirstName"];
-		MyQ_account.LastName = doc["LastName"];
-		MyQ_account.CultureCode = doc["CultureCode"];
-		MyQ_account.Address_PostalCode = doc["Address"]["PostalCode"];
-		MyQ_account.Address_Country_Code = doc["Address"]["Country"]["Code"];
-		MyQ_account.Address_Country_IsEEACountry = doc["Address"]["Country"]["IsEEACountry"];
-		MyQ_account.TimeZone_Id = doc["TimeZone"]["Id"];
-		MyQ_account.TimeZone_Name = doc["TimeZone"]["Name"];
-		MyQ_account.MailingListOptIn = doc["MailingListOptIn"];
-		MyQ_account.RequestAccountLinkInfo = doc["RequestAccountLinkInfo"];
-		MyQ_account.Phone = doc["Phone"];
-		MyQ_account.DiagnosticDataOptIn = doc["DiagnosticDataOptIn"];
+		//MyQ_account.UserName = doc["UserName"];
+		//MyQ_account.Email = doc["Email"];
+		//MyQ_account.FirstName = doc["FirstName"];
+		//MyQ_account.LastName = doc["LastName"];
+		//MyQ_account.CultureCode = doc["CultureCode"];
+		//MyQ_account.Address_PostalCode = doc["Address"]["PostalCode"];
+		//MyQ_account.Address_Country_Code = doc["Address"]["Country"]["Code"];
+		//MyQ_account.Address_Country_IsEEACountry = doc["Address"]["Country"]["IsEEACountry"];
+		//MyQ_account.TimeZone_Id = doc["TimeZone"]["Id"];
+		//MyQ_account.TimeZone_Name = doc["TimeZone"]["Name"];
+		//MyQ_account.MailingListOptIn = doc["MailingListOptIn"];
+		//MyQ_account.RequestAccountLinkInfo = doc["RequestAccountLinkInfo"];
+		//MyQ_account.Phone = doc["Phone"];
+		//MyQ_account.DiagnosticDataOptIn = doc["DiagnosticDataOptIn"];
 	}
 	else if (route == routes.getDevices) {
 		for (int i=1; i <= doc["count"]; i++) {
@@ -195,52 +200,52 @@ DynamicJsonDocument MyQ::executeRequest(String route, String method, String data
 			MyQ_devices[i].device_platform = doc["items"][i]["device_platform"];
 			MyQ_devices[i].device_type = doc["items"][i]["device_type"]; 
 			MyQ_devices[i].name = doc["items"][i]["name"]; 
-			MyQ_devices[i].created_date = doc["items"][i]["created_date"];
-			MyQ_devices[i].state_firmware_version = doc["items"][i]["state"]["firmware_version"];
-			MyQ_devices[i].state_homekit_capable = doc["items"][i]["state"]["homekit_capable"];
-			MyQ_devices[i].state_homekit_enabled = doc["items"][i]["state"]["homekit_enabled"];
-			MyQ_devices[i].state_learn = doc["items"][i]["state"]["learn"];
-			MyQ_devices[i].state_learn_mode = doc["items"][i]["state"]["learn_mode"];
+			//MyQ_devices[i].created_date = doc["items"][i]["created_date"];
+			//MyQ_devices[i].state_firmware_version = doc["items"][i]["state"]["firmware_version"];
+			//MyQ_devices[i].state_homekit_capable = doc["items"][i]["state"]["homekit_capable"];
+			//MyQ_devices[i].state_homekit_enabled = doc["items"][i]["state"]["homekit_enabled"];
+			//MyQ_devices[i].state_learn = doc["items"][i]["state"]["learn"];
+			//MyQ_devices[i].state_learn_mode = doc["items"][i]["state"]["learn_mode"];
 			MyQ_devices[i].state_updated_date = doc["items"][i]["state"]["updated_date"];
-			int jsonSize = doc["items"][i]["state"]["physical_devices"].size();
+			/*int jsonSize = doc["items"][i]["state"]["physical_devices"].size();
 			if (jsonSize > 0) {
 				for (int x = 0; x < jsonSize; x++) {
 					MyQ_devices[i].state_physical_devices[x] = doc["items"][i]["state"]["physical_devices"][x]; 
 				}
-			}
-			MyQ_devices[i].state_pending_bootload_abandoned = doc["items"][i]["state"]["pending_bootload_abandoned"];
+			}*/
+			//MyQ_devices[i].state_pending_bootload_abandoned = doc["items"][i]["state"]["pending_bootload_abandoned"];
 			MyQ_devices[i].state_online = doc["items"][i]["state"]["online"];
 			MyQ_devices[i].state_last_status = doc["items"][i]["state"]["last_status"];
-			MyQ_devices[i].parent_device = doc["items"][i]["parent_device"]; 
-			MyQ_devices[i].parent_device_id = doc["items"][i]["parent_device_id"];
-			MyQ_devices[i].created_date = doc["items"][i]["created_date"];
-			MyQ_devices[i].state_gdo_lock_connected = doc["items"][i]["state"]["gdo_lock_connected"];
-			MyQ_devices[i].state_attached_work_light_error_present = doc["items"][i]["state"]["attached_work_light_error_present"];
+			//MyQ_devices[i].parent_device = doc["items"][i]["parent_device"]; 
+			//MyQ_devices[i].parent_device_id = doc["items"][i]["parent_device_id"];
+			//MyQ_devices[i].created_date = doc["items"][i]["created_date"];
+			//MyQ_devices[i].state_gdo_lock_connected = doc["items"][i]["state"]["gdo_lock_connected"];
+			//MyQ_devices[i].state_attached_work_light_error_present = doc["items"][i]["state"]["attached_work_light_error_present"];
 			MyQ_devices[i].state_door_state = doc["items"][i]["state"]["door_state"]; 
-			MyQ_devices[i].state_open = doc["items"][i]["state"]["open"]; 
-			MyQ_devices[i].state_close = doc["items"][i]["state"]["close"];
+			//MyQ_devices[i].state_open = doc["items"][i]["state"]["open"]; 
+			//MyQ_devices[i].state_close = doc["items"][i]["state"]["close"];
 			MyQ_devices[i].state_last_update = doc["items"][i]["state"]["last_update"];
-			MyQ_devices[i].state_passthrough_interval = doc["items"][i]["state"]["passthrough_interval"];
-			MyQ_devices[i].state_door_ajar_interval = doc["items"][i]["state"]["door_ajar_interval"];
-			MyQ_devices[i].state_invalid_credential_window = doc["items"][i]["state"]["invalid_credential_window"];
-			MyQ_devices[i].state_invalid_shutout_period = doc["items"][i]["state"]["invalid_shutout_period"];
-			MyQ_devices[i].state_is_unattended_open_allowed = doc["items"][i]["state"]["is_unattended_open_allowed"];
-			MyQ_devices[i].state_is_unattended_close_allowed = doc["items"][i]["state"]["is_unattended_close_allowed"];
-			MyQ_devices[i].state_aux_relay_delay = doc["items"][i]["state"]["aux_relay_delay"];
-			MyQ_devices[i].state_use_aux_relay = doc["items"][i]["state"]["use_aux_relay"];
-			MyQ_devices[i].state_aux_relay_behavior = doc["items"][i]["state"]["aux_relay_behavior"];
-			MyQ_devices[i].state_rex_fires_door = doc["items"][i]["state"]["rex_fires_door"];
-			MyQ_devices[i].state_command_channel_report_status = doc["items"][i]["state"]["command_channel_report_status"]; 
-			MyQ_devices[i].state_control_from_browser = doc["items"][i]["state"]["control_from_browser"];
-			MyQ_devices[i].state_report_forced = doc["items"][i]["state"]["report_forced"];
-			MyQ_devices[i].state_report_ajar = doc["items"][i]["state"]["report_ajar"];
-			MyQ_devices[i].state_max_invalid_attempts = doc["items"][i]["state"]["max_invalid_attempts"];
+			//MyQ_devices[i].state_passthrough_interval = doc["items"][i]["state"]["passthrough_interval"];
+			//MyQ_devices[i].state_door_ajar_interval = doc["items"][i]["state"]["door_ajar_interval"];
+			//MyQ_devices[i].state_invalid_credential_window = doc["items"][i]["state"]["invalid_credential_window"];
+			//MyQ_devices[i].state_invalid_shutout_period = doc["items"][i]["state"]["invalid_shutout_period"];
+			//MyQ_devices[i].state_is_unattended_open_allowed = doc["items"][i]["state"]["is_unattended_open_allowed"];
+			//MyQ_devices[i].state_is_unattended_close_allowed = doc["items"][i]["state"]["is_unattended_close_allowed"];
+			//MyQ_devices[i].state_aux_relay_delay = doc["items"][i]["state"]["aux_relay_delay"];
+			//MyQ_devices[i].state_use_aux_relay = doc["items"][i]["state"]["use_aux_relay"];
+			//MyQ_devices[i].state_aux_relay_behavior = doc["items"][i]["state"]["aux_relay_behavior"];
+			//MyQ_devices[i].state_rex_fires_door = doc["items"][i]["state"]["rex_fires_door"];
+			//MyQ_devices[i].state_command_channel_report_status = doc["items"][i]["state"]["command_channel_report_status"]; 
+			//MyQ_devices[i].state_control_from_browser = doc["items"][i]["state"]["control_from_browser"];
+			//MyQ_devices[i].state_report_forced = doc["items"][i]["state"]["report_forced"];
+			//MyQ_devices[i].state_report_ajar = doc["items"][i]["state"]["report_ajar"];
+			//MyQ_devices[i].state_max_invalid_attempts = doc["items"][i]["state"]["max_invalid_attempts"];
 		}
 	}
 	else {
 		// error of some sort, device type not found
-	}*/
-//}
+	}
+}
 
 String MyQ::getAccountInfo() {
 	String data = "";

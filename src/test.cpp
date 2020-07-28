@@ -17,12 +17,12 @@
 const int configpin = 10;
 int port = 80;
 const int ledpin = LED_BUILTIN;
-const String username = "dmaslach@gmail.com";
-const String password = "dPaHx9e3zTmm";
+char myqUsername[40];
+char myqPassword[40];
 /// ##### End user configuration ######
 
 const bool enableMDNSServices = true;
-char wifi_config_name[] = "ESP Setup";	// Default
+char wifi_config_name[32] = "ESP Setup";	// Default
 char host_name[20] = "DM";				// Default
 bool shouldSaveConfig = false;			// Flag for saving data
 File fsUploadFile;
@@ -30,7 +30,9 @@ Ticker led1tick;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdateServer;
 
-MyQ myq("", username, password, "");
+extern MyQ_devices_t MyQ_devices[10];				// up to 10 devices
+extern MyQ_account_t MyQ_account;
+
 
 //+=============================================================================
 // convert the file extension to the MIME type
@@ -287,8 +289,13 @@ bool setupWifi(bool resetConf) {
 	}
 
 	WiFiManagerParameter custom_hostname("hostname", "Choose a hostname to this IR Controller", host_name, 20);
+	WiFiManagerParameter custom_myqUsername("Login ID", "MyQ User Login", myqUsername, 40);
+	WiFiManagerParameter custom_myqPassword("Password", "MyQ Password", myqPassword, 40);
 
 	wifiManager.addParameter(&custom_hostname);
+	wifiManager.addParameter(&custom_myqUsername);
+	wifiManager.addParameter(&custom_myqPassword);
+	
 	// fetches ssid and pass and tries to connect, if it does not connect it starts an access point with the specified name and goes into a blocking loop
 	// awaiting configuration
 	if (!wifiManager.autoConnect(wifi_config_name)) {
@@ -299,13 +306,19 @@ bool setupWifi(bool resetConf) {
 	}
 
 	// if you get here you have connected to the WiFi
-	strncpy(host_name, custom_hostname.getValue(), 20);
+	strncpy(host_name, custom_hostnamge.getValue(), 20);
+	strncpy(myqUsername, custom_myqUsername.getValue(), 40);
+	strncpy(myqPassword, custom_myqPassword.getValue(), 40);
+
 	WiFi.onStationModeDisconnected(&lostWifiCallback);	// Reset device if lost wifi Connection
 	Serial.println("WiFi connected! User chose hostname '" + String(host_name) + "'");
 	if (shouldSaveConfig) {	 // save the custom parameters to FS
 		Serial.println(" Config...");
 		DynamicJsonDocument json(100);
 		json["hostname"] = host_name;
+		json["myqusername"] = myqUsername;
+		json["myqpassword"] = myqPassword;
+
 		File configFile = LittleFS.open("/config.json", "w");
 		if (!configFile) {
 			Serial.println("Failed to open config file for writing");
@@ -361,7 +374,7 @@ void setup() {
 	if (enableMDNSServices) {
 		enableMDNS();
 	}
-
+	MyQ myq("", myqUsername, myqPassword, "");
 	httpUpdateServer.setup(&server);
 	serverSetup();
 	server.begin();
@@ -371,14 +384,12 @@ void loop() {
 	ArduinoOTA.handle();
 	server.handleClient();
 	MDNS.update();
-	Serial.println(system_get_free_heap_size());
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(500);
 		Serial.print(".");
   	}
 	myq.login();
 	myq.getDevices();
-	Serial.println(system_get_free_heap_size());
 	delay(3000000);
 
 

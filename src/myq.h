@@ -84,39 +84,39 @@ struct routes_t {
 //  defaultCulture: "en",
 //  appId: "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu",
 // },
-/*
+
 struct MyQ_account_t {
-	const char* Account_Id;
-	const char* Account_Name;
-	const char* Account_Email;
-	const char* Account_Address_AddressLine1;
-	const char* Account_Address_AddressLine2;
-	const char* Account_Address_City;
-	const char* Account_Address_State;
-	const char* Account_Address_PostalCode;
-	const char* Account_Address_Country_Code;
-	bool Account_Address_Country_IsEEACountry;
-	const char* Account_Phone;
-	const char* Account_ContactName;
-	int Account_DirectoryCodeLength;
-	int Account_UserAllowance;
-	const char* Account_TimeZone;
-	const char* AnalyticsId;
+	//const char* Account_Id;
+	//const char* Account_Name;
+	//const char* Account_Email;
+	//const char* Account_Address_AddressLine1;
+	//const char* Account_Address_AddressLine2;
+	//const char* Account_Address_City;
+	//const char* Account_Address_State;
+	//const char* Account_Address_PostalCode;
+	//const char* Account_Address_Country_Code;
+	//bool Account_Address_Country_IsEEACountry;
+	//const char* Account_Phone;
+	//const char* Account_ContactName;
+	//int Account_DirectoryCodeLength;
+	//int Account_UserAllowance;
+	//const char* Account_TimeZone;
+	//const char* AnalyticsId;
 	const char* UserId;
-	const char* UserName;
-	const char* Email;
-	const char* FirstName;
-	const char* LastName;
-	const char* CultureCode;
-	const char* Address_PostalCode;
-	const char* Address_Country_Code;
-	bool Address_Country_IsEEACountry;
-	const char* TimeZone_Id;
-	const char* TimeZone_Name;
-	bool MailingListOptIn;
-	bool RequestAccountLinkInfo;
-	const char* Phone;
-	bool DiagnosticDataOptIn;
+	//const char* UserName;
+	//const char* Email;
+	//const char* FirstName;
+	//const char* LastName;
+	//const char* CultureCode;
+	//const char* Address_PostalCode;
+	//const char* Address_Country_Code;
+	//bool Address_Country_IsEEACountry;
+	//const char* TimeZone_Id;
+	//const char* TimeZone_Name;
+	//bool MailingListOptIn;
+	//bool RequestAccountLinkInfo;
+	//const char* Phone;
+	//bool DiagnosticDataOptIn;
 };
 
 struct MyQ_devices_t {
@@ -125,42 +125,42 @@ struct MyQ_devices_t {
     const char* device_platform;
     const char* device_type;
     const char* name;
-    const char* created_date;
-    const char* state_firmware_version;
-    bool state_homekit_capable;
-    bool state_homekit_enabled;
-    const char* state_learn;
-    bool state_learn_mode;
+    //const char* created_date;
+    //const char* state_firmware_version;
+    //bool state_homekit_capable;
+    //bool state_homekit_enabled;
+    //const char* state_learn;
+    //bool state_learn_mode;
     const char* state_updated_date;
-    const char* state_physical_devices[10];
-    bool state_pending_bootload_abandoned;
+    //const char* state_physical_devices[10];
+   // bool state_pending_bootload_abandoned;
     bool state_online; 
     const char* state_last_status;
-    const char* parent_device;
-    const char* parent_device_id;
-    bool state_gdo_lock_connected;
-    bool state_attached_work_light_error_present;
+    //const char* parent_device;
+    //const char* parent_device_id;
+    //bool state_gdo_lock_connected;
+    //bool state_attached_work_light_error_present;
     const char* state_door_state;
-    const char* state_open;
-    const char* state_close;
+    //const char* state_open;
+    //const char* state_close;
     const char* state_last_update;
-    const char* state_passthrough_interval;
-    const char* state_door_ajar_interval;
-    const char* state_invalid_credential_window;
-    const char* state_invalid_shutout_period;
-    bool state_is_unattended_open_allowed;
-    bool state_is_unattended_close_allowed;
-    const char* state_aux_relay_delay;
-    bool state_use_aux_relay;
-    const char* state_aux_relay_behavior;
-    bool state_rex_fires_door;
-    bool state_command_channel_report_status;
-    bool state_control_from_browser;
-    bool state_report_forced;
-    bool state_report_ajar;
-    int state_max_invalid_attempts;
-    };
-*/
+    //const char* state_passthrough_interval;
+    //const char* state_door_ajar_interval;
+    //const char* state_invalid_credential_window;
+    //const char* state_invalid_shutout_period;
+    //bool state_is_unattended_open_allowed;
+    //bool state_is_unattended_close_allowed;
+    //const char* state_aux_relay_delay;
+    //bool state_use_aux_relay;
+    //const char* state_aux_relay_behavior;
+    //bool state_rex_fires_door;
+    //bool state_command_channel_report_status;
+    //bool state_control_from_browser;
+    //bool state_report_forced;
+    //bool state_report_ajar;
+    //int state_max_invalid_attempts;
+};
+
 class MyQ {
    public:
 	MyQ(String accountId, String username, String password, String securityToken);
@@ -175,7 +175,7 @@ class MyQ {
 	void setDeviceState();
 	void setDoorOpen();
 	void setLightState();
-	//void parseData(DynamicJsonDocument doc, String route);
+	void parseData(DynamicJsonDocument doc, String route);
 
    protected:
 	String _accountId;

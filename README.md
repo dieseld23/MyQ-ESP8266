@@ -19,7 +19,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <p align="center">
-  <h3 align="center">MyQ-8266</h3>
+  <h3 align="center">MyQ-ESP8266</h3>
 </p>
 
 
