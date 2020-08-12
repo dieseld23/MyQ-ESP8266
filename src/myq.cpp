@@ -1,20 +1,18 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
+#include <JSON_Decoder.h>
+#include <JSON_Listener.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <myq.h>
-// Fingerprint for https://api.myqdevice.com/api/v5/Login, expires on Aug 25, 2020
-const uint8_t fingerprint[40] = {0x8a, 0xb1, 0x03, 0x3f, 0xd3, 0x12, 0x26, 0x89, 0x75, 0xcf, 0x03, 0x49, 0x74, 0x86, 0x25, 0x62, 0x15, 0x38, 0x74, 0x6d};
+// Fingerprint for https://api.myqdevice.com/api/v5/Login, expires on July 20, 2022
+const uint8_t fingerprint[40] = {0x4f, 0x32, 0xcb, 0x4e, 0xbc, 0xdc, 0x7f, 0x19, 0xfd, 0x7e, 0x1f, 0xaf, 0x64, 0x01, 0x30, 0x5f, 0xe0, 0x9b, 0x21, 0xc6};
 
 const String authVersion = "v5";
 const String deviceVersion = "v5.1";
 const String MyQApplicationId = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu";
 const String baseUrl = "https://api.myqdevice.com/api/";
-const size_t bufferSize = 1024;
 routes_t routes;
-extern MyQ_devices_t MyQ_devices[10];				// up to 10 devices
-extern MyQ_account_t MyQ_account;
 
 MyQ::MyQ(String accountId, String username, String password, String securityToken) {
 	_accountId = accountId;
@@ -23,34 +21,25 @@ MyQ::MyQ(String accountId, String username, String password, String securityToke
 	_securityToken = securityToken;
 }
 
+void MyQ::setLogin(String username, String password) {
+	_username = username;
+	_password = password;
+}
+
 void MyQ::login(void) {
 	if (_username == NULL || _password == NULL) {
 		Serial.println("No username or password defined");
 		// throw error, username and password not defined 	return ErrorHandler.returnError(14);
 	}
-	DynamicJsonDocument doc(bufferSize);
 	String httpRequestData = "{\"Username\":\"" + _username + "\",\"Password\":\"" + _password + "\"}";
-	doc = executeRequest(routes.login, "POST", httpRequestData);
-	//Serial.println(doc.as<String>());
-	//Serial.println(system_get_free_heap_size());
-	//if (doc["returnCode"] != 0) {
-		// throw error, look up in return code list        throw originalResponse;
-	//}
+	getData(routes.login, "POST", httpRequestData);
 
-	// if (!(doc["response"] || !(doc["response"])))
-	//	  if (!response || !response.data) {
-	//			return ErrorHandler.returnError(12);
-
-	// const { data } = response;
-	if (doc["SecurityToken"] == NULL || doc["SecurityToken"] == "") {
-		Serial.println("No token");
+	if (_securityToken == NULL || _securityToken == "") {
+		Serial.println("Login: No token");
 		// return Error 11		return ErrorHandler.returnError(11);
-	} 
-	else {
-		_securityToken = doc["SecurityToken"].as<String>();
-	//	Serial.println(_securityToken);
+	} else {
+		Serial.println(_securityToken);
 	}
-	doc.garbageCollect();
 }
 
 bool MyQ::checkIsLoggedIn() {
@@ -60,207 +49,16 @@ bool MyQ::checkIsLoggedIn() {
 	return true;
 }
 
-DynamicJsonDocument MyQ::executeRequest(String route, String method, String data) {
-	bool isLoginRequest = false;
-	int httpResponseCode = 0;
-	
-	DynamicJsonDocument doc(bufferSize);
-	std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-	client->setFingerprint(fingerprint);
-
-	HTTPClient https;
-
-	String url = baseUrl;
-	if (route == routes.login) {
-		isLoginRequest = true;
-		url += authVersion;
-		url += route;
-	} else if (route == routes.account) {  // expands account data
-		url += authVersion;
-		url += route;
-		url += "?expand=account";
-	} else {
-		url += deviceVersion;
-		url += route;
-	}
-	Serial.println(url);
-	// https.setReuse(true);
-	https.begin(*client, url);
-	https.addHeader("Content-Type", "application/json");
-	https.addHeader("MyQApplicationId", MyQApplicationId);
-	https.addHeader("User-Agent", "okhttp/3.10.0");
-	https.addHeader("ApiVersion", deviceVersion);
-	https.addHeader("BrandId", "2");
-	https.addHeader("Culture", "en");
-
-	if (isLoginRequest == false && checkIsLoggedIn() == false) {  // If we aren't logged in or logging in, throw an error.
-		Serial.println(F("not logged in or not logging in"));
-		// return ErrorHandler.returnError(13);
-	} else if (isLoginRequest == false) {
-		https.addHeader("SecurityToken", _securityToken);  // Add our security token to the headers.
-	}
-
-	if (method == "POST") {
-		Serial.println(data);
-		httpResponseCode = https.POST(data);
-	} 
-	else if (method == "GET") {
-		httpResponseCode = https.GET();
-	} 
-	else if (method == "PUT") {
-		//return doc["returnCode"] = 32;	// return error, bad method
-	}
-
-	if (httpResponseCode > 0) {					// only if using GET or POST (not PUT)
-		StaticJsonDocument<128> filter;
-		if (route == routes.account) {
-			filter["Account"]["Id"] = true;
-			DeserializationError error = deserializeJson(doc, https.getString(),DeserializationOption::Filter(filter));			// need to filter, JSON returned from getDevices is too large and doesn't work 
-			if (error) {
-				Serial.println(F("ERROR: There was an error while deserializing1"));
-				Serial.println(error.c_str());
-				doc["returnCode"] = 31;
-			}
-		}
-
-		else if (route == routes.getDevices) {
-			filter["count"] = true;
-			filter["items"]["serial_number"] = true;
-			filter["items"]["device_family"] = true;
-			filter["items"]["device_type"] = true;
-			filter["items"]["name"] = true;
-			filter["items"]["state"]["online"] = true;
-			filter["items"]["state"]["door_state"] = true;
-			filter["items"]["state"]["last_update"] = true;
-			filter["items"]["state"]["last_status"] = true;
-
-		}
-	
-		DeserializationError error = deserializeJson(doc, https.getString(),DeserializationOption::Filter(filter));	
-		
-		if (error) {
-			Serial.println(F("ERROR: There was an error while deserializing"));
-			Serial.println(error.c_str());
-			doc["returnCode"] = 31;
-			} 
-		else {
-			//parseData(doc, route);
-			doc["returnCode"] = 0;
-		}
-			//return doc;
-		//} else {
-		//	doc["returnCode"] = 33;
-			// parseBadResponse(httpResponseCode);
-	//	}
-	}
-	https.end();  // Close connection
-	return doc;
-}
-
-void MyQ::parseData(DynamicJsonDocument doc, String route) {
-
-	if (route == routes.account) {				// commented out unused json items, left them to show what you can get if you need it
-		//MyQ_account.Account_Id = doc["Account"]["Id"];
-		//MyQ_account.Account_Name = doc["Account"]["Name"];
-		//MyQ_account.Account_Email = doc["Account"]["Email"];
-		//MyQ_account.Account_Address_AddressLine1 = doc["Account"]["Address"]["AddressLine1"];
-		//MyQ_account.Account_Address_AddressLine2 = doc["Account"]["Address"]["AddressLine2"];
-		//MyQ_account.Account_Address_City = doc["Account"]["Address"]["City"];
-		//MyQ_account.Account_Address_State = doc["Account"]["Address"]["State"];
-		//MyQ_account.Account_Address_PostalCode = doc["Account"]["Address"]["PostalCode"];
-		//MyQ_account.Account_Address_Country_Code = doc["Account"]["Address"]["Country"]["Code"];
-		//MyQ_account.Account_Address_Country_IsEEACountry = doc["Account"]["Address"]["Country"]["IsEEACountry"];
-		//MyQ_account.Account_Phone = doc["Account"]["Phone"];
-		//MyQ_account.Account_ContactName = doc["Account"]["ContactName"];
-		//MyQ_account.Account_DirectoryCodeLength = doc["Account"]["DirectoryCodeLength"];
-		//MyQ_account.Account_UserAllowance = doc["Account"]["UserAllowance"];
-		//MyQ_account.Account_TimeZone = doc["Account"]["TimeZone"];
-		//MyQ_account.AnalyticsId = doc["AnalyticsId"];
-		MyQ_account.UserId = doc["UserId"];
-		//MyQ_account.UserName = doc["UserName"];
-		//MyQ_account.Email = doc["Email"];
-		//MyQ_account.FirstName = doc["FirstName"];
-		//MyQ_account.LastName = doc["LastName"];
-		//MyQ_account.CultureCode = doc["CultureCode"];
-		//MyQ_account.Address_PostalCode = doc["Address"]["PostalCode"];
-		//MyQ_account.Address_Country_Code = doc["Address"]["Country"]["Code"];
-		//MyQ_account.Address_Country_IsEEACountry = doc["Address"]["Country"]["IsEEACountry"];
-		//MyQ_account.TimeZone_Id = doc["TimeZone"]["Id"];
-		//MyQ_account.TimeZone_Name = doc["TimeZone"]["Name"];
-		//MyQ_account.MailingListOptIn = doc["MailingListOptIn"];
-		//MyQ_account.RequestAccountLinkInfo = doc["RequestAccountLinkInfo"];
-		//MyQ_account.Phone = doc["Phone"];
-		//MyQ_account.DiagnosticDataOptIn = doc["DiagnosticDataOptIn"];
-	}
-	else if (route == routes.getDevices) {
-		for (int i=1; i <= doc["count"]; i++) {
-		
-			MyQ_devices[i].serial_number = doc["items"][i]["serial_number"]; 
-			MyQ_devices[i].device_family = doc["items"][i]["device_family"];
-			MyQ_devices[i].device_platform = doc["items"][i]["device_platform"];
-			MyQ_devices[i].device_type = doc["items"][i]["device_type"]; 
-			MyQ_devices[i].name = doc["items"][i]["name"]; 
-			//MyQ_devices[i].created_date = doc["items"][i]["created_date"];
-			//MyQ_devices[i].state_firmware_version = doc["items"][i]["state"]["firmware_version"];
-			//MyQ_devices[i].state_homekit_capable = doc["items"][i]["state"]["homekit_capable"];
-			//MyQ_devices[i].state_homekit_enabled = doc["items"][i]["state"]["homekit_enabled"];
-			//MyQ_devices[i].state_learn = doc["items"][i]["state"]["learn"];
-			//MyQ_devices[i].state_learn_mode = doc["items"][i]["state"]["learn_mode"];
-			MyQ_devices[i].state_updated_date = doc["items"][i]["state"]["updated_date"];
-			/*int jsonSize = doc["items"][i]["state"]["physical_devices"].size();
-			if (jsonSize > 0) {
-				for (int x = 0; x < jsonSize; x++) {
-					MyQ_devices[i].state_physical_devices[x] = doc["items"][i]["state"]["physical_devices"][x]; 
-				}
-			}*/
-			//MyQ_devices[i].state_pending_bootload_abandoned = doc["items"][i]["state"]["pending_bootload_abandoned"];
-			MyQ_devices[i].state_online = doc["items"][i]["state"]["online"];
-			MyQ_devices[i].state_last_status = doc["items"][i]["state"]["last_status"];
-			//MyQ_devices[i].parent_device = doc["items"][i]["parent_device"]; 
-			//MyQ_devices[i].parent_device_id = doc["items"][i]["parent_device_id"];
-			//MyQ_devices[i].created_date = doc["items"][i]["created_date"];
-			//MyQ_devices[i].state_gdo_lock_connected = doc["items"][i]["state"]["gdo_lock_connected"];
-			//MyQ_devices[i].state_attached_work_light_error_present = doc["items"][i]["state"]["attached_work_light_error_present"];
-			MyQ_devices[i].state_door_state = doc["items"][i]["state"]["door_state"]; 
-			//MyQ_devices[i].state_open = doc["items"][i]["state"]["open"]; 
-			//MyQ_devices[i].state_close = doc["items"][i]["state"]["close"];
-			MyQ_devices[i].state_last_update = doc["items"][i]["state"]["last_update"];
-			//MyQ_devices[i].state_passthrough_interval = doc["items"][i]["state"]["passthrough_interval"];
-			//MyQ_devices[i].state_door_ajar_interval = doc["items"][i]["state"]["door_ajar_interval"];
-			//MyQ_devices[i].state_invalid_credential_window = doc["items"][i]["state"]["invalid_credential_window"];
-			//MyQ_devices[i].state_invalid_shutout_period = doc["items"][i]["state"]["invalid_shutout_period"];
-			//MyQ_devices[i].state_is_unattended_open_allowed = doc["items"][i]["state"]["is_unattended_open_allowed"];
-			//MyQ_devices[i].state_is_unattended_close_allowed = doc["items"][i]["state"]["is_unattended_close_allowed"];
-			//MyQ_devices[i].state_aux_relay_delay = doc["items"][i]["state"]["aux_relay_delay"];
-			//MyQ_devices[i].state_use_aux_relay = doc["items"][i]["state"]["use_aux_relay"];
-			//MyQ_devices[i].state_aux_relay_behavior = doc["items"][i]["state"]["aux_relay_behavior"];
-			//MyQ_devices[i].state_rex_fires_door = doc["items"][i]["state"]["rex_fires_door"];
-			//MyQ_devices[i].state_command_channel_report_status = doc["items"][i]["state"]["command_channel_report_status"]; 
-			//MyQ_devices[i].state_control_from_browser = doc["items"][i]["state"]["control_from_browser"];
-			//MyQ_devices[i].state_report_forced = doc["items"][i]["state"]["report_forced"];
-			//MyQ_devices[i].state_report_ajar = doc["items"][i]["state"]["report_ajar"];
-			//MyQ_devices[i].state_max_invalid_attempts = doc["items"][i]["state"]["max_invalid_attempts"];
-		}
-	}
-	else {
-		// error of some sort, device type not found
-	}
-}
-
 String MyQ::getAccountInfo() {
-	String data = "";
-	DynamicJsonDocument doc(bufferSize);
-	doc = executeRequest(routes.account, "GET", data);
-	_accountId = doc["Account"]["Id"].as<String>();
-	
-	if (/*doc["returnCode"] != 0 || */_accountId == NULL || _accountId == "") {
-		Serial.println("No account info returned");
-		//return ErrorHandler.returnError(11);
-	} 
-	return _accountId;
-	doc.garbageCollect();
-//.catch(({ response }) => ErrorHandler.parseBadResponse(response));
+	getData(routes.account, "GET");
 
+	Serial.println(_accountId);
+	if (_accountId == NULL || _accountId == "") {
+		Serial.println("No account info returned");
+		// return ErrorHandler.returnError(11);
+	}
+	return _accountId;
+	//.catch(({ response }) => ErrorHandler.parseBadResponse(response));
 }
 
 void MyQ::getDevices() {
@@ -272,20 +70,17 @@ void MyQ::getDevices() {
 	newRoute.replace("{accountId}", _accountId);
 	Serial.println(newRoute);
 	// if everything is ok with account info goto next step
-	DynamicJsonDocument doc(bufferSize);
-	doc = executeRequest(newRoute, "GET", "");
+	getData(newRoute, "GET", "");
+	// if (doc["returnCode"] != 0 || doc["returnCode"] == NULL) {
+	// error - no code returned
+	//		Serial.println("no code returned");
+	//}
 
-	if (doc["returnCode"] != 0 || doc["returnCode"] == NULL) {
-		// error - no code returned
-		Serial.println("no code returned");
-	} 
-	
-	else {
+	//	else {
 	//	Serial.println(MyQ_devices[0].device_type);
 	//	Serial.println(MyQ_devices[1].device_type);
-	}
-	
-	doc.garbageCollect();
+	//	}
+
 	/*
 		  const {
 			response: { data },
@@ -332,7 +127,6 @@ void MyQ::getDevices() {
 		})
 		.catch(({ response }) => ErrorHandler.parseBadResponse(response));
 	}*/
-
 }
 
 void MyQ::getDeviceState() {
@@ -452,6 +246,234 @@ void MyQ::setLightState() {
 	}
 	}*/
 }
+
+void MyQ::getData(String route, String method, String data) {
+	JSON_Decoder parser;	   // Create an instance of the parser
+	parser.setListener(this);  // Pass pointer to "this" MyQ class to the listener
+							   // so it can call the support functions in this class
+	bool isLoginRequest = false;
+	int httpResponseCode = 0;
+	
+	std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+	client->setFingerprint(fingerprint);
+
+	HTTPClient https;
+
+	String url = baseUrl;
+	if (route == routes.login) {
+		isLoginRequest = true;
+		url += authVersion;
+		url += route;
+	} else if (route == routes.account) {  // expands account data
+		url += authVersion;
+		url += route;
+		url += "?expand=account";
+	} else {
+		url += deviceVersion;
+		url += route;
+	}
+
+	//https.useHTTP10(true);
+	https.begin(*client, url);
+	https.addHeader("Content-Type", "application/json");
+	https.addHeader("MyQApplicationId", MyQApplicationId);
+	https.addHeader("User-Agent", "okhttp/3.10.0");
+	https.addHeader("ApiVersion", deviceVersion);
+	https.addHeader("BrandId", "2");
+	https.addHeader("Culture", "en");
+
+	if (isLoginRequest == false && checkIsLoggedIn() == false) {  // If we aren't logged in or logging in, throw an error.
+		Serial.println(F("Not logged in OR not logging in"));
+		// return ErrorHandler.returnError(13);
+	} else if (isLoginRequest == false) {
+		Serial.println("added SecurityToken: " + _securityToken);
+		https.addHeader("SecurityToken", _securityToken);  // Add our security token to the headers.
+	}
+	if (method == "POST") {
+		Serial.println(data);
+		httpResponseCode = https.POST(data);
+	} else if (method == "GET") {
+		httpResponseCode = https.GET();
+	} else if (method == "PUT") {
+		// return doc["returnCode"] = 32;	// return error, bad method
+	} else {
+		Serial.println(F("No method given for HTTP Request"));
+		return;
+	}
+
+	Serial.println(httpResponseCode);
+	// Local variables for time-out etc
+	uint32_t timeout = millis();
+	char c = 0;
+	//uint16_t count = 0;
+
+	// Read the JSON character by character and pass it to the JSON decoder
+	// The decoder will call the MyQ class during decoding, so we can save the decoded values
+
+	// Use OR since data may still be in the buffer when the client has disconnected!
+	while (client->available() > 0/* || client->connected()*/) {
+		while (client->available() > 0) {
+			c = client->read();	 // Read a received character
+
+			parser.parse(c);  // Pass to the parser, parser will call listener support functions as needed
+			if ((millis() - timeout) > 250UL) {  // Check for timeout
+				Serial.println("JSON parse client timeout");
+				parser.reset();
+				https.end();
+				client->stop();
+				return;
+			}
+			
+		}
+		
+
+	}
+
+	Serial.println("end");
+	parser.reset();
+	
+	client->stop();
+	https.end();
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a key has been read
+***************************************************************************************/
+void MyQ::key(const char *key) {
+	currentKey = key;
+
+	// Serial.print("key: ");
+	 //Serial.println(key);
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a value has been read
+***************************************************************************************/
+void MyQ::value(const char *value) {
+	String val = value;
+
+	// Test only:
+	// Serial.print("\nvaluePath     :"); Serial.println(valuePath);
+	// Serial.print("currentParent :"); Serial.println(currentParent);
+	// Serial.print("currentKey    :"); Serial.println(currentKey);
+	// Serial.print("arrayIndex    :"); Serial.println(arrayIndex);
+	// Serial.print("Value    :"); Serial.println(val);
+
+	if (currentKey == "SecurityToken") {
+		_securityToken = val;
+		return;
+	}
+
+	if (currentParent == "Account") {
+		if (currentKey == "Id") {
+			//MyQ_account->Account_Id = val;
+			_accountId = val;
+			return;
+		}
+	}
+
+	else if (currentParent == "Devices") {
+		if (currentKey == "serial_number") {
+			MyQ_devices->serial_number = val;
+			return;
+		} else if (currentKey == "device_family") {
+			MyQ_devices->device_family = val;
+			return;
+		} else if (currentKey == "device_platform") {
+			MyQ_devices->device_platform = val;
+			return;
+		} else if (currentKey == "device_type") {
+			MyQ_devices->device_type = val;
+			return;
+		} else if (currentKey == "name") {
+			MyQ_devices->name = val;
+			return;
+		} else if (currentKey == "state_updated_date") {
+			MyQ_devices->state_updated_date = val;
+			return;
+		} else if (currentKey == "state_door_state") {
+			MyQ_devices->state_door_state = val;
+			return;
+		} else if (currentKey == "state_last_update") {
+			MyQ_devices->state_last_update = val;
+			return;
+		} else if (currentKey == "state_online") {
+			//MyQ_devices->state_online = (bool)val;
+			return;
+		}
+	}
+}
+/***************************************************************************************
+**  JSON Decoder library calls this when a start of document decoded
+***************************************************************************************/
+void MyQ::startDocument() {
+	currentParent = currentKey = "";
+	arrayIndex = 0;
+	ended = false;
+	 //Serial.println("\nstart document");
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a end of document decoded
+***************************************************************************************/
+void MyQ::endDocument() {
+	ended = true;
+	// Serial.println("end document. ");
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a start of object decoded
+***************************************************************************************/
+void MyQ::startObject() {
+	currentParent = currentKey;
+	// Serial.println("start object. ");
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a end of object decoded
+***************************************************************************************/
+void MyQ::endObject() {
+	currentParent = "";
+	arrayIndex++;
+	 //Serial.println("end object. Array Index: " + arrayIndex);
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when an array of values has started
+***************************************************************************************/
+void MyQ::startArray() {
+	arrayIndex = 0;
+	valuePath = currentParent + "/" + currentKey;
+	// Serial.println("start array. ");
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when an array of values has ended
+***************************************************************************************/
+void MyQ::endArray() {
+	valuePath = "";
+	 //Serial.println("end array. ");
+}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a character is whitespace (not used here)
+***************************************************************************************/
+// whitespace(char c) not used, JSON Listener substitutes a dummy function
+// void MyQ::whitespace(char c) {
+// Serial.println("whitespace");
+//}
+
+/***************************************************************************************
+**  JSON Decoder library calls this when a decoding error occurs
+***************************************************************************************/
+void MyQ::error(const char *message) {
+	if (ended == false)	 // Only report errors in a document
+	{
+		Serial.print("\nError message: ");
+		Serial.println(message);
+	}
+}
+
 /*
 result_t errorHandler::parseBadResponse(String response) {
 	if (!response) {

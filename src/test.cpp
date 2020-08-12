@@ -14,11 +14,11 @@
 #include <myq.h>
 
 /// ##### Start user configuration ######
-const int configpin = 10;
+const int configpin = 0;
 int port = 80;
 const int ledpin = LED_BUILTIN;
-char myqUsername[40];
-char myqPassword[40];
+String myqUsername;
+String myqPassword;
 /// ##### End user configuration ######
 
 const bool enableMDNSServices = true;
@@ -29,10 +29,9 @@ File fsUploadFile;
 Ticker led1tick;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdateServer;
-
-extern MyQ_devices_t MyQ_devices[10];				// up to 10 devices
-extern MyQ_account_t MyQ_account;
-
+MyQ myq("", myqUsername, myqPassword, "");
+MyQ_devices_t *MyQ_devices[10];				// up to 10 devices
+MyQ_account_t *MyQ_account;
 
 //+=============================================================================
 // convert the file extension to the MIME type
@@ -278,6 +277,12 @@ bool setupWifi(bool resetConf) {
 					if (json.containsKey("hostname")) {
 						strncpy(host_name, json["hostname"], 20);
 					}
+					if (json.containsKey("myqusername")) {
+						myqUsername = json["myqusername"].as<String>();
+					}
+					if (json.containsKey("myqpassword")) {
+						myqPassword = json["myqpassword"].as<String>();
+					}
 				} else {
 					Serial.println("Failed to load json config");
 				}
@@ -289,8 +294,8 @@ bool setupWifi(bool resetConf) {
 	}
 
 	WiFiManagerParameter custom_hostname("hostname", "Choose a hostname to this IR Controller", host_name, 20);
-	WiFiManagerParameter custom_myqUsername("Login ID", "MyQ User Login", myqUsername, 40);
-	WiFiManagerParameter custom_myqPassword("Password", "MyQ Password", myqPassword, 40);
+	WiFiManagerParameter custom_myqUsername("Login ID", "MyQ User Login", myqUsername.c_str(), 40);
+	WiFiManagerParameter custom_myqPassword("Password", "MyQ Password", myqPassword.c_str(), 40);
 
 	wifiManager.addParameter(&custom_hostname);
 	wifiManager.addParameter(&custom_myqUsername);
@@ -306,9 +311,9 @@ bool setupWifi(bool resetConf) {
 	}
 
 	// if you get here you have connected to the WiFi
-	strncpy(host_name, custom_hostnamge.getValue(), 20);
-	strncpy(myqUsername, custom_myqUsername.getValue(), 40);
-	strncpy(myqPassword, custom_myqPassword.getValue(), 40);
+	strncpy(host_name, custom_hostname.getValue(), 20);
+	myqUsername = String(custom_myqUsername.getValue());
+	myqPassword = String(custom_myqPassword.getValue());
 
 	WiFi.onStationModeDisconnected(&lostWifiCallback);	// Reset device if lost wifi Connection
 	Serial.println("WiFi connected! User chose hostname '" + String(host_name) + "'");
@@ -341,6 +346,7 @@ bool setupWifi(bool resetConf) {
 //
 void setup() {
 	pinMode(ledpin, OUTPUT);
+	pinMode(configpin, INPUT_PULLUP);
 	Serial.begin(115200);
 	delay(5000);
 
@@ -374,23 +380,26 @@ void setup() {
 	if (enableMDNSServices) {
 		enableMDNS();
 	}
-	MyQ myq("", myqUsername, myqPassword, "");
+	myq.setLogin(myqUsername, myqPassword);	
 	httpUpdateServer.setup(&server);
 	serverSetup();
 	server.begin();
+	
 }
 
 void loop() {
 	ArduinoOTA.handle();
 	server.handleClient();
 	MDNS.update();
+	
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(500);
 		Serial.print(".");
   	}
+	  Serial.println(myqUsername);
 	myq.login();
 	myq.getDevices();
-	delay(3000000);
+	delay(30000);
 
 
 }
