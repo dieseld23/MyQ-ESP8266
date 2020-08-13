@@ -17,8 +17,8 @@
 const int configpin = 0;
 int port = 80;
 const int ledpin = LED_BUILTIN;
-String myqUsername;
-String myqPassword;
+char myqUsername[40];
+char myqPassword[40];
 /// ##### End user configuration ######
 
 const bool enableMDNSServices = true;
@@ -30,8 +30,7 @@ Ticker led1tick;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdateServer;
 MyQ myq("", myqUsername, myqPassword, "");
-MyQ_devices_t *MyQ_devices[10];				// up to 10 devices
-MyQ_account_t *MyQ_account;
+
 
 //+=============================================================================
 // convert the file extension to the MIME type
@@ -248,24 +247,27 @@ void serverSetup() {
 // Setup Wifi
 //
 bool setupWifi(bool resetConf) {
+
+
 	led1tick.attach(0.5, led1Ticker);  // start ticker with 0.5 because we start in AP mode and try to connect
 	// WiFiManager Local intialization. Once its business is done, there is no need to keep it around
 	WiFiManager wifiManager;
 	if (resetConf)	// reset settings - for testing
 		wifiManager.resetSettings();
 
+	wifiManager.setDebugOutput(false);
 	wifiManager.setAPCallback(configModeCallback);	// set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
 	wifiManager.setSaveConfigCallback(saveConfigCallback);	// set config save notify callback
 	wifiManager.setConfigPortalTimeout(180);				// Reset device if on config portal for greater than 3 minutes
 
 	if (LittleFS.begin()) {
-		Serial.println("Mounted file system");
+		//Serial.println("Mounted file system");
 		if (LittleFS.exists("/config.json")) {	// file exists, reading and loading
 
-			Serial.println("Reading config file");
+			//Serial.println("Reading config file");
 			File configFile = LittleFS.open("/config.json", "r");
 			if (configFile) {
-				Serial.println("Opened config file");
+				//Serial.println("Opened config file");
 				size_t size = configFile.size();  // Allocate a buffer to store contents of the file.
 				std::unique_ptr<char[]> buf(new char[size]);
 				configFile.readBytes(buf.get(), size);
@@ -273,15 +275,15 @@ bool setupWifi(bool resetConf) {
 				DeserializationError error = deserializeJson(json, buf.get());
 				serializeJson(json, Serial);
 				if (!error) {
-					Serial.println("\nParsed json");
+					//Serial.println("\nParsed json");
 					if (json.containsKey("hostname")) {
 						strncpy(host_name, json["hostname"], 20);
 					}
 					if (json.containsKey("myqusername")) {
-						myqUsername = json["myqusername"].as<String>();
+						strncpy(myqUsername, json["myqusername"], 40);
 					}
 					if (json.containsKey("myqpassword")) {
-						myqPassword = json["myqpassword"].as<String>();
+						strncpy(myqPassword, json["myqpassword"], 40);
 					}
 				} else {
 					Serial.println("Failed to load json config");
@@ -294,8 +296,8 @@ bool setupWifi(bool resetConf) {
 	}
 
 	WiFiManagerParameter custom_hostname("hostname", "Choose a hostname to this IR Controller", host_name, 20);
-	WiFiManagerParameter custom_myqUsername("Login ID", "MyQ User Login", myqUsername.c_str(), 40);
-	WiFiManagerParameter custom_myqPassword("Password", "MyQ Password", myqPassword.c_str(), 40);
+	WiFiManagerParameter custom_myqUsername("Login ID", "MyQ User Login", myqUsername, 40);
+	WiFiManagerParameter custom_myqPassword("Password", "MyQ Password", myqPassword, 40);
 
 	wifiManager.addParameter(&custom_hostname);
 	wifiManager.addParameter(&custom_myqUsername);
@@ -312,8 +314,8 @@ bool setupWifi(bool resetConf) {
 
 	// if you get here you have connected to the WiFi
 	strncpy(host_name, custom_hostname.getValue(), 20);
-	myqUsername = String(custom_myqUsername.getValue());
-	myqPassword = String(custom_myqPassword.getValue());
+	strncpy(myqUsername, custom_myqUsername.getValue(), 40);
+	strncpy(myqPassword, custom_myqPassword.getValue(), 40);
 
 	WiFi.onStationModeDisconnected(&lostWifiCallback);	// Reset device if lost wifi Connection
 	Serial.println("WiFi connected! User chose hostname '" + String(host_name) + "'");
@@ -399,7 +401,7 @@ void loop() {
 	  Serial.println(myqUsername);
 	myq.login();
 	myq.getDevices();
-	delay(30000);
+	delay(300000);
 
 
 }

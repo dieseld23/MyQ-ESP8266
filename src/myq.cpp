@@ -13,6 +13,8 @@ const String deviceVersion = "v5.1";
 const String MyQApplicationId = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu";
 const String baseUrl = "https://api.myqdevice.com/api/";
 routes_t routes;
+MyQ_devices_t MyQ_devices[5];				// up to 5 devices
+MyQ_account_t MyQ_account;
 
 MyQ::MyQ(String accountId, String username, String password, String securityToken) {
 	_accountId = accountId;
@@ -29,16 +31,15 @@ void MyQ::setLogin(String username, String password) {
 void MyQ::login(void) {
 	if (_username == NULL || _password == NULL) {
 		Serial.println("No username or password defined");
-		// throw error, username and password not defined 	return ErrorHandler.returnError(14);
 	}
 	String httpRequestData = "{\"Username\":\"" + _username + "\",\"Password\":\"" + _password + "\"}";
 	getData(routes.login, "POST", httpRequestData);
 
-	if (_securityToken == NULL || _securityToken == "") {
+	if (!checkIsLoggedIn()) {
 		Serial.println("Login: No token");
 		// return Error 11		return ErrorHandler.returnError(11);
 	} else {
-		Serial.println(_securityToken);
+		Serial.println("Login Successful");
 	}
 }
 
@@ -49,143 +50,145 @@ bool MyQ::checkIsLoggedIn() {
 	return true;
 }
 
-String MyQ::getAccountInfo() {
-	getData(routes.account, "GET");
+bool MyQ::getAccountInfo() {
+	if (_accountId == NULL || _accountId.isEmpty()) {
+		getData(routes.account, "GET");
 
-	Serial.println(_accountId);
-	if (_accountId == NULL || _accountId == "") {
-		Serial.println("No account info returned");
-		// return ErrorHandler.returnError(11);
+		if (_accountId == NULL || _accountId.isEmpty()) {
+			Serial.println("No account info returned");
+			return false;
+			// return ErrorHandler.returnError(11);
+		}
+		return true;
 	}
-	return _accountId;
-	//.catch(({ response }) => ErrorHandler.parseBadResponse(response));
+	return false;
+}
+
+void MyQ::getData(String route, String method, String data) {
+	JSON_Decoder parser;	   // Create an instance of the parser
+	parser.setListener(this);  // Pass pointer to "this" MyQ class to the listener
+							   // so it can call the support functions in this class
+	bool isLoginRequest = false;
+	int httpResponseCode = 0;
+	
+	std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+	client->setFingerprint(fingerprint);
+
+	HTTPClient https;
+
+	String url = baseUrl;
+	if (route == routes.login) {
+		isLoginRequest = true;
+		url += authVersion;
+		url += route;
+	} else if (route == routes.account) {  // expands account data
+		url += authVersion;
+		url += route;
+		url += "?expand=account";
+	} else {
+		url += deviceVersion;
+		url += route;
+	}
+
+	//https.useHTTP10(true);
+	https.begin(*client, url);
+	https.addHeader("Content-Type", "application/json");
+	https.addHeader("MyQApplicationId", MyQApplicationId);
+	https.addHeader("User-Agent", "okhttp/3.10.0");
+	https.addHeader("ApiVersion", deviceVersion);
+	https.addHeader("BrandId", "2");
+	https.addHeader("Culture", "en");
+
+	if (isLoginRequest == false && checkIsLoggedIn() == false) {  // If we aren't logged in or logging in, throw an error.
+		Serial.println(F("Not logged in OR not logging in"));
+	} else if (isLoginRequest == false) {
+		https.addHeader("SecurityToken", _securityToken);  // Add our security token to the headers.
+	}
+	if (method == "POST") {
+		httpResponseCode = https.POST(data);
+	} else if (method == "GET") {
+		httpResponseCode = https.GET();
+	} else if (method == "PUT") {
+		// return doc["returnCode"] = 32;	// return error, bad method
+	} else {
+		Serial.println(F("No method given for HTTP Request"));
+		return;
+	}
+
+	// Local variables for time-out etc
+	uint32_t timeout = millis();
+	char c = 0;
+
+	// Read the JSON character by character and pass it to the JSON decoder
+	// The decoder will call the MyQ class during decoding, so we can save the decoded values
+
+	// Use OR since data may still be in the buffer when the client has disconnected!
+	// DM - ESP8266 hangs with client->connected using OR... since its connected but no data coming in?
+
+	if (httpResponseCode == 200) {
+		while (client->available() > 0 && client->connected()) {
+			while (client->available() > 0) {
+				c = client->read();	 // Read a received character
+				parser.parse(c);  // Pass to the parser, parser will call listener support functions as needed
+				if ((millis() - timeout) > 500UL) {  // Check for timeout
+					Serial.println("JSON parse client timeout");
+					parser.reset();
+					https.end();
+					client->stop();
+					return;
+				}	
+			}
+			delay(1);
+		}
+	}
+	else {
+		Serial.println("Error: Response from server was " + httpResponseCode);
+	}
+	parser.reset();
+	client->stop();
+	https.end();
 }
 
 void MyQ::getDevices() {
-	Serial.println(_accountId);
-	if (_accountId == NULL || _accountId.isEmpty()) {
-		getAccountInfo();
+	_count = 0;
+	
+	if (getAccountInfo()) {
+		String newRoute = routes.getDevices;
+		newRoute.replace("{accountId}", _accountId);
+		// if everything is ok with account info goto next step
+		getData(newRoute, "GET", "");
+
+		for (int i = 0; i < _count; i++) {
+			delay(5);
+			Serial.println(MyQ_devices[_count].device_family);
+			Serial.println(MyQ_devices[_count].name);
+			Serial.println(MyQ_devices[_count].device_type);
+			Serial.println(MyQ_devices[_count].serial_number);
+			Serial.println(MyQ_devices[_count].state_online);
+		}
+
 	}
-	String newRoute = routes.getDevices;
-	newRoute.replace("{accountId}", _accountId);
-	Serial.println(newRoute);
-	// if everything is ok with account info goto next step
-	getData(newRoute, "GET", "");
-	// if (doc["returnCode"] != 0 || doc["returnCode"] == NULL) {
-	// error - no code returned
-	//		Serial.println("no code returned");
-	//}
-
-	//	else {
-	//	Serial.println(MyQ_devices[0].device_type);
-	//	Serial.println(MyQ_devices[1].device_type);
-	//	}
-
-	/*
-		  const {
-			response: { data },
-		  } = returnValue;
-
-		  const devices = data.items;
-		  if (!devices) {
-			return ErrorHandler.returnError(11);
-		  }
-
-		  const result = {
-			returnCode: 0,
-		  };
-
-		  const modifiedDevices = [];
-		  Object.values(devices).forEach(device => {
-			const modifiedDevice = {
-			  family: device.device_family,
-			  name: device.name,
-			  type: device.device_type,
-			  serialNumber: device.serial_number,
-			};
-
-			const { state } = device;
-			if (constants.myQProperties.online in state) {
-			  modifiedDevice.online = state[constants.myQProperties.online];
-			}
-			if (constants.myQProperties.doorState in state) {
-			  modifiedDevice.doorState = state[constants.myQProperties.doorState];
-			  const date = new Date(state[constants.myQProperties.lastUpdate]);
-			  modifiedDevice.doorStateUpdated = date.toLocaleString();
-			}
-			if (constants.myQProperties.lightState in state) {
-			  modifiedDevice.lightState = state[constants.myQProperties.lightState];
-			  const date = new Date(state[constants.myQProperties.lastUpdate]);
-			  modifiedDevice.lightStateUpdated = date.toLocaleString();
-			}
-
-			modifiedDevices.push(modifiedDevice);
-		  });
-
-		  result.devices = modifiedDevices;
-		  return result;
-		})
-		.catch(({ response }) => ErrorHandler.parseBadResponse(response));
-	}*/
 }
 
-void MyQ::getDeviceState() {
-	/*
-	getDeviceState(serialNumber, attributeName) {
-	  return this.getDevices()
-		.then(response => {
-		  const device = (response.devices || []).find(d => d.serialNumber === serialNumber);
-		  if (!device) {
-			return ErrorHandler.returnError(18);
-		  } else if (!(attributeName in device)) {
-			return ErrorHandler.returnError(19);
-		  }
-
-		  const result = {
-			returnCode: 0,
-			state: device[attributeName],
-		  };
-		  return result;
-		})
-		.catch(({ response }) => ErrorHandler.parseBadResponse(response));
+/*const char* MyQ::getDeviceState(const char* serial_number, const char* attributeName) {
+	
+	for (int i = 0; i < _count; i++) {
+		if (strcmp(MyQ_devices[_count]->serial_number, serial_number)) {
+			if (strcmp(attributeName, MyQ_devices[_count]->name)) {
+				return MyQ_devices[_count]->name;
+			}
+			else if ((strcmp(attributeName, MyQ_devices[_count]->name)) {
+			}
+		}
 	}
-	*/
-}
+	
+
+}*/
 
 void MyQ::getDoorState() {
-	/*
-	getDoorState(serialNumber) {
-	  return this.getDeviceState(serialNumber, 'doorState')
-		.then(result => {
-		  if (result.returnCode !== 0) {
-			return result;
-		  }
-
-		  const newResult = JSON.parse(JSON.stringify(result));
-		  newResult.doorState = newResult.state;
-		  delete newResult.state;
-		  return newResult;
-		})
-		.catch(({ response }) => ErrorHandler.parseBadResponse(response));
-	}*/
 }
 
 void MyQ::getLightState() {
-	/*
-		getLightState(serialNumber) {
-	  return this.getDeviceState(serialNumber, 'lightState')
-		.then(result => {
-		  if (result.returnCode !== 0) {
-			return result;
-		  }
-
-		  const newResult = JSON.parse(JSON.stringify(result));
-		  newResult.lightState = newResult.state;
-		  delete newResult.state;
-		  return newResult;
-		})
-		.catch(({ response }) => ErrorHandler.parseBadResponse(response));
-	}*/
 }
 
 void MyQ::setDeviceState() {
@@ -247,103 +250,14 @@ void MyQ::setLightState() {
 	}*/
 }
 
-void MyQ::getData(String route, String method, String data) {
-	JSON_Decoder parser;	   // Create an instance of the parser
-	parser.setListener(this);  // Pass pointer to "this" MyQ class to the listener
-							   // so it can call the support functions in this class
-	bool isLoginRequest = false;
-	int httpResponseCode = 0;
-	
-	std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-	client->setFingerprint(fingerprint);
-
-	HTTPClient https;
-
-	String url = baseUrl;
-	if (route == routes.login) {
-		isLoginRequest = true;
-		url += authVersion;
-		url += route;
-	} else if (route == routes.account) {  // expands account data
-		url += authVersion;
-		url += route;
-		url += "?expand=account";
-	} else {
-		url += deviceVersion;
-		url += route;
-	}
-
-	//https.useHTTP10(true);
-	https.begin(*client, url);
-	https.addHeader("Content-Type", "application/json");
-	https.addHeader("MyQApplicationId", MyQApplicationId);
-	https.addHeader("User-Agent", "okhttp/3.10.0");
-	https.addHeader("ApiVersion", deviceVersion);
-	https.addHeader("BrandId", "2");
-	https.addHeader("Culture", "en");
-
-	if (isLoginRequest == false && checkIsLoggedIn() == false) {  // If we aren't logged in or logging in, throw an error.
-		Serial.println(F("Not logged in OR not logging in"));
-		// return ErrorHandler.returnError(13);
-	} else if (isLoginRequest == false) {
-		Serial.println("added SecurityToken: " + _securityToken);
-		https.addHeader("SecurityToken", _securityToken);  // Add our security token to the headers.
-	}
-	if (method == "POST") {
-		Serial.println(data);
-		httpResponseCode = https.POST(data);
-	} else if (method == "GET") {
-		httpResponseCode = https.GET();
-	} else if (method == "PUT") {
-		// return doc["returnCode"] = 32;	// return error, bad method
-	} else {
-		Serial.println(F("No method given for HTTP Request"));
-		return;
-	}
-
-	Serial.println(httpResponseCode);
-	// Local variables for time-out etc
-	uint32_t timeout = millis();
-	char c = 0;
-	//uint16_t count = 0;
-
-	// Read the JSON character by character and pass it to the JSON decoder
-	// The decoder will call the MyQ class during decoding, so we can save the decoded values
-
-	// Use OR since data may still be in the buffer when the client has disconnected!
-	while (client->available() > 0/* || client->connected()*/) {
-		while (client->available() > 0) {
-			c = client->read();	 // Read a received character
-
-			parser.parse(c);  // Pass to the parser, parser will call listener support functions as needed
-			if ((millis() - timeout) > 250UL) {  // Check for timeout
-				Serial.println("JSON parse client timeout");
-				parser.reset();
-				https.end();
-				client->stop();
-				return;
-			}
-			
-		}
-		
-
-	}
-
-	Serial.println("end");
-	parser.reset();
-	
-	client->stop();
-	https.end();
-}
 
 /***************************************************************************************
 **  JSON Decoder library calls this when a key has been read
 ***************************************************************************************/
 void MyQ::key(const char *key) {
 	currentKey = key;
-
-	// Serial.print("key: ");
-	 //Serial.println(key);
+	//Serial.print("Key: ");
+	//Serial.println(key);
 }
 
 /***************************************************************************************
@@ -366,41 +280,50 @@ void MyQ::value(const char *value) {
 
 	if (currentParent == "Account") {
 		if (currentKey == "Id") {
-			//MyQ_account->Account_Id = val;
+			//MyQ_account->Account_Id = val;		
 			_accountId = val;
 			return;
 		}
 	}
 
-	else if (currentParent == "Devices") {
+	else if (currentKey == "count") {
+		_count = val.toInt();
+		return;
+	}
+
+	else if (currentParent == "items" && _count > 0) {
 		if (currentKey == "serial_number") {
-			MyQ_devices->serial_number = val;
+			MyQ_devices[_count-1].serial_number = val;
 			return;
 		} else if (currentKey == "device_family") {
-			MyQ_devices->device_family = val;
+			MyQ_devices[_count-1].device_family = val;
 			return;
 		} else if (currentKey == "device_platform") {
-			MyQ_devices->device_platform = val;
+			MyQ_devices[_count-1].device_platform = val;
 			return;
 		} else if (currentKey == "device_type") {
-			MyQ_devices->device_type = val;
+			MyQ_devices[_count-1].device_type = val;
 			return;
 		} else if (currentKey == "name") {
-			MyQ_devices->name = val;
-			return;
-		} else if (currentKey == "state_updated_date") {
-			MyQ_devices->state_updated_date = val;
-			return;
-		} else if (currentKey == "state_door_state") {
-			MyQ_devices->state_door_state = val;
-			return;
-		} else if (currentKey == "state_last_update") {
-			MyQ_devices->state_last_update = val;
-			return;
-		} else if (currentKey == "state_online") {
-			//MyQ_devices->state_online = (bool)val;
+			MyQ_devices[_count-1].name = val;
 			return;
 		}
+	}
+	
+	else if (currentParent == "state" && _count > 0) {
+		if (currentKey == "door_state") {
+			MyQ_devices[_count-1].state_door_state = val;
+			return;
+		} else if (currentKey == "last_update" || currentKey == "updated_date") {
+			MyQ_devices[_count-1].state_last_update = val;
+			return;
+		} else if (currentKey == "online") {
+			MyQ_devices[_count-1].state_online = (bool)val;
+			return;
+		} else if (currentKey == "last_status") {
+			MyQ_devices[_count-1].state_last_status = val;
+		}
+
 	}
 }
 /***************************************************************************************

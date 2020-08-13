@@ -7,15 +7,8 @@
 #include <JSON_Decoder.h>
 #include <JSON_Listener.h>
 #include <WiFiClientSecureBearSSL.h>
-
-const struct allDeviceTypes_t {
-	const String hub = "hub";
-	const String virtualGarageDoorOpener = "virtualgaragedooropener";
-	const String wifiGarageDoorOpener = "wifigaragedooropener";
-	const String wifiGdoGateway = "wifigdogateway";
-} allDeviceTypes;
-
-const struct errorMessages_t {
+/*
+static const struct errorMessages_t {
 	const String e11 = "Something unexpected happened. Please wait a bit and try again.";
 	const String e12 = "MyQ service is currently down. Please wait a bit and try again.";
 	const String e13 = "Not logged in.";
@@ -27,38 +20,7 @@ const struct errorMessages_t {
 	const String e19 = "Unable to determine the state of the requested device.";
 	const String e20 = "Could not find that URL. Please file a bug report.";
 } errorMessages;
-
-const struct doorCommands_t {
-	const String close = "close";
-	const String open = "open";
-} doorCommands;
-
-const struct doorStates_t {
-	const String s1 = "open";
-	const String s2 = "closed";
-	const String s3 = "stopped in the middle";
-	const String s4 = "going up";
-	const String s5 = "going down";
-	const String s9 = "not closed";
-} doorStates;
-
-const struct lightCommands_t {
-	const String on = "on";
-	const String off = "off";
-} lightCommands;
-
-const struct lightStates_t {
-	const String s0 = "turnoff";
-	const String s1 = "turnon";
-} lightStates;
-
-const struct myQProperties_t {
-	const String doorState = "door_state";
-	const String lastUpdate = "last_update";
-	const String lightState = "light_state";
-	const String online = "online";
-} myQProperties;
-
+*/
 struct routes_t {
 	const String account = "/My";
 	String getDevices = "/Accounts/{accountId}/Devices";
@@ -72,7 +34,7 @@ struct routes_t {
 };
 
 // Structures  to hold the parsed values
-typedef struct MyQ_account_t {
+struct MyQ_account_t {
 	String Account_Id;
 	// const char* Account_Name;
 	// const char* Account_Email;
@@ -104,16 +66,16 @@ typedef struct MyQ_account_t {
 	// bool RequestAccountLinkInfo;
 	// const char* Phone;
 	// bool DiagnosticDataOptIn;
-} MyQ_account_t;
+};
 
-typedef struct MyQ_devices_t {
+struct MyQ_devices_t {
 	String serial_number;
 	String device_family;
 	String device_platform;
 	String device_type;
 	String name;
-	// const char* created_date;
-	// const char* state_firmware_version;
+	// String created_date;
+	// String state_firmware_version;
 	// bool state_homekit_capable;
 	// bool state_homekit_enabled;
 	// const char* state_learn;
@@ -146,22 +108,7 @@ typedef struct MyQ_devices_t {
 	// bool state_report_forced;
 	// bool state_report_ajar;
 	// int state_max_invalid_attempts;
-} MyQ_devices_t;
-
-// const struct result_t {
-//	int returnCode;
-//   String message;
-//    String providerMessage;
-//   String unhandledError;
-//} result;
-
-// struct headers: {
-//  defaultUserAgent: "okhttp/3.10.0",
-//  deviceApiVersion: deviceVersion,
-//  defaultBrandId: 2,
-//  defaultCulture: "en",
-//  appId: "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu",
-// },
+};
 
 class MyQ : public JsonListener {
    public:
@@ -169,9 +116,9 @@ class MyQ : public JsonListener {
 	void setLogin(String username, String password);
 	void login();
 	bool checkIsLoggedIn();
-	String getAccountInfo();
+	bool getAccountInfo();
 	void getDevices();
-	void getDeviceState();
+	const char* getDeviceState(const char *serial_number, const char *attributeName);
 	void getDoorState();
 	void getLightState();
 	void setDeviceState();
@@ -188,9 +135,7 @@ class MyQ : public JsonListener {
 	void endObject();
 	void startArray();
 	void endArray();
-	MyQ_devices_t *MyQ_devices;	 // pointer provided by sketch
-	MyQ_account_t *MyQ_account;
-	
+
    protected:
 	String _accountId;
 	String _username;
@@ -199,6 +144,7 @@ class MyQ : public JsonListener {
 
    private:
 	bool ended = true;			 // Flag to indicate document has ended
+	uint8_t _count = 0;
 	String currentParent;		 // Current object e.g. "request"
 	String currentKey;			 // Name key of the name:value pair e.g "temperature"
 	uint16_t arrayIndex;		 // Array index 0-N e.g. 4 for 5th pass, qualify with valuePath
@@ -207,14 +153,6 @@ class MyQ : public JsonListener {
 								 // so values can be pulled from the correct array.
 								 // Needed since different objects contain "data" arrays.
 
-};
-
-class errorHandler {
-   public:
-	// result_t parseBadResponse(int response);
-	// result_t returnError(int returnCode, String error, String response);
-   protected:
-   private:
 };
 
 #endif /* MYQ_H_ */
