@@ -158,8 +158,9 @@ void MyQ::getDevices() {
 		// if everything is ok with account info goto next step
 		getData(newRoute, "GET", "");
 
-		for (int i = 0; i < _count; i++) {
+		for (int i = 0; i <= _count; i++) {
 			delay(5);
+			Serial.println(_count);
 			Serial.println(MyQ_devices[_count].device_family);
 			Serial.println(MyQ_devices[_count].name);
 			Serial.println(MyQ_devices[_count].device_type);
@@ -287,43 +288,40 @@ void MyQ::value(const char *value) {
 	}
 
 	else if (currentKey == "count") {
-		_count = val.toInt();
+		_count = val.toInt() - 1;
 		return;
 	}
 
-	else if (currentParent == "items" && _count > 0) {
+	else if (valuePath == "/items") {
 		if (currentKey == "serial_number") {
-			MyQ_devices[_count-1].serial_number = val;
+			MyQ_devices[arrayIndex].serial_number = val;
 			return;
 		} else if (currentKey == "device_family") {
-			MyQ_devices[_count-1].device_family = val;
+			MyQ_devices[arrayIndex].device_family = val;
 			return;
 		} else if (currentKey == "device_platform") {
-			MyQ_devices[_count-1].device_platform = val;
+			MyQ_devices[arrayIndex].device_platform = val;
 			return;
 		} else if (currentKey == "device_type") {
-			MyQ_devices[_count-1].device_type = val;
+			MyQ_devices[arrayIndex].device_type = val;
 			return;
 		} else if (currentKey == "name") {
-			MyQ_devices[_count-1].name = val;
+			MyQ_devices[arrayIndex].name = val;
 			return;
+		} else if (currentParent == "state" && _count >= 0) {
+			if (currentKey == "door_state") {
+				MyQ_devices[arrayIndex].state_door_state = val;
+				return;
+			} else if (currentKey == "last_update" || currentKey == "updated_date") {
+				MyQ_devices[arrayIndex].state_last_update = val;
+				return;
+			} else if (currentKey == "online") {
+				MyQ_devices[arrayIndex].state_online = (bool)val;
+				return;
+			} else if (currentKey == "last_status") {
+				MyQ_devices[arrayIndex].state_last_status = val;
+			}
 		}
-	}
-	
-	else if (currentParent == "state" && _count > 0) {
-		if (currentKey == "door_state") {
-			MyQ_devices[_count-1].state_door_state = val;
-			return;
-		} else if (currentKey == "last_update" || currentKey == "updated_date") {
-			MyQ_devices[_count-1].state_last_update = val;
-			return;
-		} else if (currentKey == "online") {
-			MyQ_devices[_count-1].state_online = (bool)val;
-			return;
-		} else if (currentKey == "last_status") {
-			MyQ_devices[_count-1].state_last_status = val;
-		}
-
 	}
 }
 /***************************************************************************************
@@ -367,7 +365,7 @@ void MyQ::endObject() {
 void MyQ::startArray() {
 	arrayIndex = 0;
 	valuePath = currentParent + "/" + currentKey;
-	// Serial.println("start array. ");
+	 //Serial.println("start array. ");
 }
 
 /***************************************************************************************
@@ -375,7 +373,7 @@ void MyQ::startArray() {
 ***************************************************************************************/
 void MyQ::endArray() {
 	valuePath = "";
-	 //Serial.println("end array. ");
+	//Serial.println("end array. ");
 }
 
 /***************************************************************************************
