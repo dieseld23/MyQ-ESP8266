@@ -20,7 +20,6 @@ const int ledpin = LED_BUILTIN;
 char myqUsername[40];
 char myqPassword[40];
 /// ##### End user configuration ######
-
 const bool enableMDNSServices = true;
 char wifi_config_name[32] = "ESP Setup";	// Default
 char host_name[20] = "DM";				// Default

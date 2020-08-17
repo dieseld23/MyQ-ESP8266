@@ -1,20 +1,21 @@
 #include <Arduino.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
-#include <JSON_Decoder.h>
-#include <JSON_Listener.h>
+#include <ArduinoStreamParser.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <myq.h>
+#include <myqParser.h>
+
+#include <forward_list>
+#include <stdexcept>
+
 // Fingerprint for https://api.myqdevice.com/api/v5/Login, expires on July 20, 2022
 const uint8_t fingerprint[40] = {0x4f, 0x32, 0xcb, 0x4e, 0xbc, 0xdc, 0x7f, 0x19, 0xfd, 0x7e, 0x1f, 0xaf, 0x64, 0x01, 0x30, 0x5f, 0xe0, 0x9b, 0x21, 0xc6};
-
 const String authVersion = "v5";
 const String deviceVersion = "v5.1";
 const String MyQApplicationId = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tuPb8iHfRHKwTmDzHOu";
 const String baseUrl = "https://api.myqdevice.com/api/";
 routes_t routes;
-MyQ_devices_t MyQ_devices[5];				// up to 5 devices
-MyQ_account_t MyQ_account;
 
 MyQ::MyQ(String accountId, String username, String password, String securityToken) {
 	_accountId = accountId;
@@ -44,33 +45,37 @@ void MyQ::login(void) {
 }
 
 bool MyQ::checkIsLoggedIn() {
-	if (_securityToken == NULL || _securityToken == "") {
+	if (MyQ_account.SecurityToken == NULL || MyQ_account.SecurityToken == "") {
 		return false;
 	}
 	return true;
 }
 
 bool MyQ::getAccountInfo() {
-	if (_accountId == NULL || _accountId.isEmpty()) {
+	if (MyQ_account.Account_Id == NULL || MyQ_account.Account_Id.isEmpty()) {
 		getData(routes.account, "GET");
 
-		if (_accountId == NULL || _accountId.isEmpty()) {
+		if (MyQ_account.Account_Id == NULL || MyQ_account.Account_Id.isEmpty()) {
 			Serial.println("No account info returned");
 			return false;
 			// return ErrorHandler.returnError(11);
 		}
+		Serial.println("Account info returned");
 		return true;
 	}
+	Serial.println("No account info returned");
 	return false;
 }
 
 void MyQ::getData(String route, String method, String data) {
-	JSON_Decoder parser;	   // Create an instance of the parser
-	parser.setListener(this);  // Pass pointer to "this" MyQ class to the listener
-							   // so it can call the support functions in this class
+	ArudinoStreamParser parser;	 // JSON Streaming Parser
+	myqParser myqHandler;
+
+	parser.setHandler(&myqHandler);	 // Link to customer listener (parser to be honest) // Pass pointer to "this" MyQ class to the listener
+
 	bool isLoginRequest = false;
 	int httpResponseCode = 0;
-	
+
 	std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
 	client->setFingerprint(fingerprint);
 
@@ -90,7 +95,7 @@ void MyQ::getData(String route, String method, String data) {
 		url += route;
 	}
 
-	//https.useHTTP10(true);
+	// https.useHTTP10(true);
 	https.begin(*client, url);
 	https.addHeader("Content-Type", "application/json");
 	https.addHeader("MyQApplicationId", MyQApplicationId);
@@ -102,11 +107,15 @@ void MyQ::getData(String route, String method, String data) {
 	if (isLoginRequest == false && checkIsLoggedIn() == false) {  // If we aren't logged in or logging in, throw an error.
 		Serial.println(F("Not logged in OR not logging in"));
 	} else if (isLoginRequest == false) {
-		https.addHeader("SecurityToken", _securityToken);  // Add our security token to the headers.
+		Serial.println(MyQ_account.SecurityToken);
+		https.addHeader("SecurityToken", MyQ_account.SecurityToken);  // Add our security token to the headers.
 	}
 	if (method == "POST") {
+		Serial.println("POST");
 		httpResponseCode = https.POST(data);
 	} else if (method == "GET") {
+		Serial.println("GET");
+		Serial.println("Account Id:  " + MyQ_account.Account_Id);
 		httpResponseCode = https.GET();
 	} else if (method == "PUT") {
 		// return doc["returnCode"] = 32;	// return error, bad method
@@ -115,64 +124,24 @@ void MyQ::getData(String route, String method, String data) {
 		return;
 	}
 
-	// Local variables for time-out etc
-	uint32_t timeout = millis();
-	char c = 0;
-
-	// Read the JSON character by character and pass it to the JSON decoder
-	// The decoder will call the MyQ class during decoding, so we can save the decoded values
-
-	// Use OR since data may still be in the buffer when the client has disconnected!
-	// DM - ESP8266 hangs with client->connected using OR... since its connected but no data coming in?
-
-	if (httpResponseCode == 200) {
-		while (client->available() > 0 && client->connected()) {
-			while (client->available() > 0) {
-				c = client->read();	 // Read a received character
-				parser.parse(c);  // Pass to the parser, parser will call listener support functions as needed
-				if ((millis() - timeout) > 500UL) {  // Check for timeout
-					Serial.println("JSON parse client timeout");
-					parser.reset();
-					https.end();
-					client->stop();
-					return;
-				}	
-			}
-			delay(1);
-		}
-	}
-	else {
-		Serial.println("Error: Response from server was " + httpResponseCode);
-	}
-	parser.reset();
+	Serial.println("Parsing JSON...");
+	https.writeToStream(&parser);  // Shoot it straight to the parser
+	Serial.println("Completed Parsing.");
 	client->stop();
 	https.end();
 }
 
 void MyQ::getDevices() {
-	_count = 0;
-	
 	if (getAccountInfo()) {
 		String newRoute = routes.getDevices;
-		newRoute.replace("{accountId}", _accountId);
+		newRoute.replace("{accountId}", MyQ_account.Account_Id);
 		// if everything is ok with account info goto next step
 		getData(newRoute, "GET", "");
-
-		for (int i = 0; i <= _count; i++) {
-			delay(5);
-			Serial.println(_count);
-			Serial.println(MyQ_devices[_count].device_family);
-			Serial.println(MyQ_devices[_count].name);
-			Serial.println(MyQ_devices[_count].device_type);
-			Serial.println(MyQ_devices[_count].serial_number);
-			Serial.println(MyQ_devices[_count].state_online);
-		}
-
 	}
 }
 
 /*const char* MyQ::getDeviceState(const char* serial_number, const char* attributeName) {
-	
+
 	for (int i = 0; i < _count; i++) {
 		if (strcmp(MyQ_devices[_count]->serial_number, serial_number)) {
 			if (strcmp(attributeName, MyQ_devices[_count]->name)) {
@@ -182,7 +151,7 @@ void MyQ::getDevices() {
 			}
 		}
 	}
-	
+
 
 }*/
 
@@ -251,150 +220,7 @@ void MyQ::setLightState() {
 	}*/
 }
 
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a key has been read
-***************************************************************************************/
-void MyQ::key(const char *key) {
-	currentKey = key;
-	//Serial.print("Key: ");
-	//Serial.println(key);
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a value has been read
-***************************************************************************************/
-void MyQ::value(const char *value) {
-	String val = value;
-
-	// Test only:
-	// Serial.print("\nvaluePath     :"); Serial.println(valuePath);
-	// Serial.print("currentParent :"); Serial.println(currentParent);
-	// Serial.print("currentKey    :"); Serial.println(currentKey);
-	// Serial.print("arrayIndex    :"); Serial.println(arrayIndex);
-	// Serial.print("Value    :"); Serial.println(val);
-
-	if (currentKey == "SecurityToken") {
-		_securityToken = val;
-		return;
-	}
-
-	if (currentParent == "Account") {
-		if (currentKey == "Id") {
-			//MyQ_account->Account_Id = val;		
-			_accountId = val;
-			return;
-		}
-	}
-
-	else if (currentKey == "count") {
-		_count = val.toInt() - 1;
-		return;
-	}
-
-	else if (valuePath == "/items") {
-		if (currentKey == "serial_number") {
-			MyQ_devices[arrayIndex].serial_number = val;
-			return;
-		} else if (currentKey == "device_family") {
-			MyQ_devices[arrayIndex].device_family = val;
-			return;
-		} else if (currentKey == "device_platform") {
-			MyQ_devices[arrayIndex].device_platform = val;
-			return;
-		} else if (currentKey == "device_type") {
-			MyQ_devices[arrayIndex].device_type = val;
-			return;
-		} else if (currentKey == "name") {
-			MyQ_devices[arrayIndex].name = val;
-			return;
-		} else if (currentParent == "state" && _count >= 0) {
-			if (currentKey == "door_state") {
-				MyQ_devices[arrayIndex].state_door_state = val;
-				return;
-			} else if (currentKey == "last_update" || currentKey == "updated_date") {
-				MyQ_devices[arrayIndex].state_last_update = val;
-				return;
-			} else if (currentKey == "online") {
-				MyQ_devices[arrayIndex].state_online = (bool)val;
-				return;
-			} else if (currentKey == "last_status") {
-				MyQ_devices[arrayIndex].state_last_status = val;
-			}
-		}
-	}
-}
-/***************************************************************************************
-**  JSON Decoder library calls this when a start of document decoded
-***************************************************************************************/
-void MyQ::startDocument() {
-	currentParent = currentKey = "";
-	arrayIndex = 0;
-	ended = false;
-	 //Serial.println("\nstart document");
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a end of document decoded
-***************************************************************************************/
-void MyQ::endDocument() {
-	ended = true;
-	// Serial.println("end document. ");
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a start of object decoded
-***************************************************************************************/
-void MyQ::startObject() {
-	currentParent = currentKey;
-	// Serial.println("start object. ");
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a end of object decoded
-***************************************************************************************/
-void MyQ::endObject() {
-	currentParent = "";
-	arrayIndex++;
-	 //Serial.println("end object. Array Index: " + arrayIndex);
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when an array of values has started
-***************************************************************************************/
-void MyQ::startArray() {
-	arrayIndex = 0;
-	valuePath = currentParent + "/" + currentKey;
-	 //Serial.println("start array. ");
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when an array of values has ended
-***************************************************************************************/
-void MyQ::endArray() {
-	valuePath = "";
-	//Serial.println("end array. ");
-}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a character is whitespace (not used here)
-***************************************************************************************/
-// whitespace(char c) not used, JSON Listener substitutes a dummy function
-// void MyQ::whitespace(char c) {
-// Serial.println("whitespace");
-//}
-
-/***************************************************************************************
-**  JSON Decoder library calls this when a decoding error occurs
-***************************************************************************************/
-void MyQ::error(const char *message) {
-	if (ended == false)	 // Only report errors in a document
-	{
-		Serial.print("\nError message: ");
-		Serial.println(message);
-	}
-}
-
+///
 /*
 result_t errorHandler::parseBadResponse(String response) {
 	if (!response) {
@@ -516,3 +342,9 @@ static returnError(returnCode, error, response) {
 }
 
 */
+void MyQ::printHeapFreeToSerial() {
+	Serial.print("Heap free: ");
+	Serial.println(String(ESP.getFreeHeap(), DEC));
+	Serial.print("Stack free: ");
+	Serial.println(String(ESP.getFreeContStack(), DEC));
+}
