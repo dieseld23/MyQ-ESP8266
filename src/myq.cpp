@@ -162,6 +162,15 @@ void MyQ::getLightState() {
 }
 
 void MyQ::setDeviceState() {
+	if (getAccountInfo()) {
+		String newRoute = routes.setDevice;
+		newRoute.replace("{accountId}", MyQ_account.Account_Id);
+		newRoute.replace("{serialNumber}", MyQ_devices[1].serial_number);
+		// if everything is ok with account info goto next step
+		getData(newRoute, "GET", "");
+		Serial.println(MyQ_devices[0].name);
+		Serial.println(MyQ_devices[1].name);
+	}
 	/*setDeviceState(serialNumber, action) {
 	  let promise = Promise.resolve();
 	  if (!this.accountId) {
@@ -342,9 +351,3 @@ static returnError(returnCode, error, response) {
 }
 
 */
-void MyQ::printHeapFreeToSerial() {
-	Serial.print("Heap free: ");
-	Serial.println(String(ESP.getFreeHeap(), DEC));
-	Serial.print("Stack free: ");
-	Serial.println(String(ESP.getFreeContStack(), DEC));
-}

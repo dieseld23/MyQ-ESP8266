@@ -52,7 +52,6 @@ class MyQ {
 	void setLightState();
 
 	void getData(String route, String method, String data = "");
-void printHeapFreeToSerial();
 
    protected:
 	String _accountId;

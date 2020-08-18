@@ -41,7 +41,7 @@
 
 This project is (attempting) to make a library for the ESP8266 for MyQ devices (i.e garage door openers). 
 
-Initial code was based on the [MyQ-API](https://github.com/thomasmunduchira/myq-api) written in javascript.
+Initial code was based on the [MyQ-API](https://github.com/thomasmunduchira/myq-api) written in javascript. Using [json-streaming-parser2](https://github.com/mrfaptastic/json-streaming-parser2) to parse the stream as the return data is too much for the ESP to use ArduinoJSON.
 
 I mainly started this so I could use [the ESP-8266-AC-Control-Ext](https://github.com/dieseld23/ESP8266-AC-Controller-Ext) project and disable heating or cooling when the garage door is open. But I figured I'd try to make a library that can be reused.
 
@@ -82,6 +82,7 @@ Project Link: [https://github.com/dieseld23/MyQ-ESP8266](https://github.com/dies
 <!-- ACKNOWLEDGEMENTS -->
 ## Acknowledgements
 * [myq-api](https://github.com/thomasmunduchira/myq-api)
+* [json-streaming-parser2](https://github.com/mrfaptastic/json-streaming-parser2)
 
 
 
