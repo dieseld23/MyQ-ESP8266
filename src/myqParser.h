@@ -109,61 +109,58 @@ class myqParser : public JsonHandler {
 		memset(fullPath, 0, sizeof(fullPath));
 		path.toString(fullPath);
 		const char* currentKey = path.getKey();
-		// Serial.print(fullPath); Serial.print("': ");
-		// Serial.println(value.toString(valueBuffer));
+		Serial.print(fullPath);
+		Serial.print("': ");
+		Serial.println(value.toString(valueBuffer));
 
 		const char* currentParent = getParent(fullPath);
 
-		// Not array item
-		if (currentKey[0] != '\0') {
-			if (strcmp(currentKey, "SecurityToken") == 0) {
-				MyQ_account.SecurityToken = value.getString();
+		if (strcmp(currentKey, "SecurityToken") == 0) {
+			MyQ_account.SecurityToken = value.getString();
+			return;
+		}
+
+		else if (strcmp(currentParent, "Account") == 0) {
+			if (strcmp(currentKey, "Id") == 0) {
+				MyQ_account.Account_Id = value.getString();
 				return;
 			}
-
-			else if (strcmp(currentParent, "Account") == 0) {
-				if (strcmp(currentKey, "Id") == 0) {
-					MyQ_account.Account_Id = value.getString();
-					return;
-				}
-			}
 		}
-		// Array item.
 
-		else {
-			int currentIndex = path.getIndex();
-			char items[10];
-			sprintf(items, "items[%d]", currentIndex);
+		// Array items
 
-			if (strcmp(currentParent, items) == 0) {
-				if (strcmp(currentKey, "serial_number") == 0) {
-					MyQ_devices[currentIndex].serial_number = value.getString();
+		int currentIndex = getCurrentIndex(fullPath, "items");
+		char items[10];
+		sprintf(items, "items[%d]", currentIndex);
+	
+		if (strcmp(currentParent, items) == 0) {
+			if (strcmp(currentKey, "serial_number") == 0) {
+				MyQ_devices[currentIndex].serial_number = value.getString();
+				return;
+			} else if (strcmp(currentKey, "device_family") == 0) {
+				MyQ_devices[currentIndex].device_family = value.getString();
+				return;
+			} else if (strcmp(currentKey, "device_platform") == 0) {
+				MyQ_devices[currentIndex].device_platform = value.getString();
+				return;
+			} else if (strcmp(currentKey, "device_type") == 0) {
+				MyQ_devices[currentIndex].device_type = value.getString();
+				return;
+			} else if (strcmp(currentKey, "name") == 0) {
+				MyQ_devices[currentIndex].name = value.getString();
+				return;
+			} else if (strcmp(currentParent, "state") == 0) {
+				if (strcmp(currentKey, "door_state") == 0) {
+					MyQ_devices[currentIndex].state_door_state = value.getString();
 					return;
-				} else if (strcmp(currentKey, "device_family") == 0) {
-					MyQ_devices[currentIndex].device_family = value.getString();
+				} else if (strcmp(currentKey, "last_update") == 0 || strcmp(currentKey, "updated_date") == 0) {
+					MyQ_devices[currentIndex].state_last_update = value.getString();
 					return;
-				} else if (strcmp(currentKey, "device_platform") == 0) {
-					MyQ_devices[currentIndex].device_platform = value.getString();
+				} else if (strcmp(currentKey, "online") == 0) {
+					MyQ_devices[currentIndex].state_online = value.getBool();
 					return;
-				} else if (strcmp(currentKey, "device_type") == 0) {
-					MyQ_devices[currentIndex].device_type = value.getString();
-					return;
-				} else if (strcmp(currentKey, "name") == 0) {
-					MyQ_devices[currentIndex].name = value.getString();
-					return;
-				} else if (strcmp(currentParent, "state") == 0) {
-					if (strcmp(currentKey, "door_state") == 0) {
-						MyQ_devices[currentIndex].state_door_state = value.getString();
-						return;
-					} else if (strcmp(currentKey, "last_update") == 0 || strcmp(currentKey, "updated_date") == 0) {
-						MyQ_devices[currentIndex].state_last_update = value.getString();
-						return;
-					} else if (strcmp(currentKey, "online") == 0) {
-						MyQ_devices[currentIndex].state_online = value.getBool();
-						return;
-					} else if (strcmp(currentKey, "last_status") == 0) {
-						MyQ_devices[currentIndex].state_last_status = value.getString();
-					}
+				} else if (strcmp(currentKey, "last_status") == 0) {
+					MyQ_devices[currentIndex].state_last_status = value.getString();
 				}
 			}
 		}
@@ -178,12 +175,14 @@ class myqParser : public JsonHandler {
 	void whitespace(char c){};
 
 	const char* getParent(char* pathString) {
+		char path[200];
+		strcpy (path, pathString);
 		const char* tok = ".";
 		char* p;
 		char* p2[10];
 		int i = 0;
-
-		p = strtok(pathString, tok);
+		
+		p = strtok(path, tok);
 		p2[0] = p;
 
 		while (p != NULL) {
@@ -199,6 +198,28 @@ class myqParser : public JsonHandler {
 		}
 
 		return p2[element];
+	};
+	
+	int getCurrentIndex(char fullPath[], const char* arrayName) {
+		char newArrayName[10];
+		strcpy(newArrayName, arrayName);
+		strcpy(newArrayName + strlen(arrayName), "[");
+		char *target = NULL;
+		char *start, *end;
+
+	   	if (start = strstr(fullPath, newArrayName)) {
+   	    	start += strlen(newArrayName);
+
+   	  	  	if (end = strstr(start, "].")) {
+   	      	  	target = (char*)malloc(end-start+1);
+   	      	  	memcpy(target, start, end-start);
+   	      	  	target[end-start] = '\0';
+				int x = atoi(target);
+				free(target);
+				return x;
+			}
+		}
+		return 0;
 	};
 };
 

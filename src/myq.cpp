@@ -8,7 +8,7 @@
 
 #include <forward_list>
 #include <stdexcept>
-
+ 
 // Fingerprint for https://api.myqdevice.com/api/v5/Login, expires on July 20, 2022
 const uint8_t fingerprint[40] = {0x4f, 0x32, 0xcb, 0x4e, 0xbc, 0xdc, 0x7f, 0x19, 0xfd, 0x7e, 0x1f, 0xaf, 0x64, 0x01, 0x30, 0x5f, 0xe0, 0x9b, 0x21, 0xc6};
 const String authVersion = "v5";
@@ -60,11 +60,9 @@ bool MyQ::getAccountInfo() {
 			return false;
 			// return ErrorHandler.returnError(11);
 		}
-		Serial.println("Account info returned");
-		return true;
 	}
-	Serial.println("No account info returned");
-	return false;
+	Serial.println("Account info returned");
+	return true;
 }
 
 void MyQ::getData(String route, String method, String data) {
@@ -137,6 +135,8 @@ void MyQ::getDevices() {
 		newRoute.replace("{accountId}", MyQ_account.Account_Id);
 		// if everything is ok with account info goto next step
 		getData(newRoute, "GET", "");
+		Serial.println(MyQ_devices[0].name);
+		Serial.println(MyQ_devices[1].name);
 	}
 }
 
