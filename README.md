@@ -45,11 +45,22 @@ Initial code was based on the [MyQ-API](https://github.com/thomasmunduchira/myq-
 
 I mainly started this so I could use [the ESP-8266-AC-Control-Ext](https://github.com/dieseld23/ESP8266-AC-Controller-Ext) project and disable heating or cooling when the garage door is open. But I figured I'd try to make a library that can be reused.
 
-<!-- ROADMAP -->
-## Roadmap
 
-See the [open issues](https://github.com/dieseld23/MyQ-ESP8266/issues) for a list of proposed features (and known issues).
+<!-- SETUP -->
+## Setup Example
 
+To use, download to ESP8266 using test.cpp. Connect to the Wifi network - 'ESP Setup'. Configure it to connect to your Wifi network, and enter the username/password for your MyQ account. Save and reconnect your PC to your home network. It should connect to your network (if the light on the ESP8266 flashes fast, then hit the reset. Sometimes it wont connnect or takes a couple resets. I havent looked into why yet). 
+Use serial monitor to see if it connects to your MyQ account and gets your devices. 
+
+<!-- UPDATES -->
+## Updates
+ 
+This seems to be working right now. I was able to open/close the garage. yay! I've spent hours to do the same thing as my garage door opener. 
+TODO:
+- Implement error codes like in MyQ-API
+- Better functions to open/close doors, maybe register devices in a struct/map type thing so you can use setDoorOpen("Garage Door 1") rather than to referring it by serial number
+- Make the code look less bad lol I'm not a programmer
+- Convert Strings to char arrays (I started and annoyed me so I won't until I find I'm running out of memory)
 
 
 <!-- CONTRIBUTING -->

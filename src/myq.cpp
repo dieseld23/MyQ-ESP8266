@@ -9,6 +9,11 @@
 #include <forward_list>
 #include <stdexcept>
  
+#define OPEN 	true
+#define CLOSE	false
+#define ON 		true
+#define OFF 	false
+
 // Fingerprint for https://api.myqdevice.com/api/v5/Login, expires on July 20, 2022
 const uint8_t fingerprint[40] = {0x4f, 0x32, 0xcb, 0x4e, 0xbc, 0xdc, 0x7f, 0x19, 0xfd, 0x7e, 0x1f, 0xaf, 0x64, 0x01, 0x30, 0x5f, 0xe0, 0x9b, 0x21, 0xc6};
 const String authVersion = "v5";
@@ -17,11 +22,7 @@ const String MyQApplicationId = "JVM/G9Nwih5BwKgNCjLxiFUQxQijAebyyg8QUHr7JOrP+tu
 const String baseUrl = "https://api.myqdevice.com/api/";
 routes_t routes;
 
-MyQ::MyQ(String accountId, String username, String password, String securityToken) {
-	_accountId = accountId;
-	_username = username;
-	_password = password;
-	_securityToken = securityToken;
+MyQ::MyQ() {
 }
 
 void MyQ::setLogin(String username, String password) {
@@ -29,10 +30,12 @@ void MyQ::setLogin(String username, String password) {
 	_password = password;
 }
 
+
 void MyQ::login(void) {
 	if (_username == NULL || _password == NULL) {
 		Serial.println("No username or password defined");
 	}
+
 	String httpRequestData = "{\"Username\":\"" + _username + "\",\"Password\":\"" + _password + "\"}";
 	getData(routes.login, "POST", httpRequestData);
 
@@ -116,6 +119,7 @@ void MyQ::getData(String route, String method, String data) {
 		Serial.println("Account Id:  " + MyQ_account.Account_Id);
 		httpResponseCode = https.GET();
 	} else if (method == "PUT") {
+		httpResponseCode = https.PUT(data);
 		// return doc["returnCode"] = 32;	// return error, bad method
 	} else {
 		Serial.println(F("No method given for HTTP Request"));
@@ -155,22 +159,22 @@ void MyQ::getDevices() {
 
 }*/
 
-void MyQ::getDoorState() {
+void MyQ::getDoorState(const char* serialNumber) {
 }
 
-void MyQ::getLightState() {
+void MyQ::getLightState(const char* serialNumber) {
 }
 
-void MyQ::setDeviceState() {
+void MyQ::setDeviceState(const char* serialNumber, const char* action) {
 	if (getAccountInfo()) {
 		String newRoute = routes.setDevice;
 		newRoute.replace("{accountId}", MyQ_account.Account_Id);
 		newRoute.replace("{serialNumber}", MyQ_devices[1].serial_number);
+		Serial.println(MyQ_devices[1].serial_number);
 		// if everything is ok with account info goto next step
-		getData(newRoute, "GET", "");
-		Serial.println(MyQ_devices[0].name);
-		Serial.println(MyQ_devices[1].name);
+		getData(newRoute, "PUT", "{\"action_type\":\"" + (String)action + "\"}");
 	}
+
 	/*setDeviceState(serialNumber, action) {
 	  let promise = Promise.resolve();
 	  if (!this.accountId) {
@@ -202,7 +206,16 @@ void MyQ::setDeviceState() {
 	}*/
 }
 
-void MyQ::setDoorOpen() {
+void MyQ::setDoorOpen(const char* serialNumber, bool state) {			//true = open, false = close
+	
+	if (state == true) {
+		setDeviceState(serialNumber, "open");
+
+	}
+	else if (state == false) {
+		setDeviceState(serialNumber, "close");
+	}
+	
 	/*
 	setDoorOpen(serialNumber, shouldOpen) {
 	  let action = constants.doorCommands.close;
@@ -217,7 +230,7 @@ void MyQ::setDoorOpen() {
 	*/
 }
 
-void MyQ::setLightState() {
+void MyQ::setLightState(const char* serialNumber, bool state) {			//true = on, false = off
 	/*
 	setLightState(serialNumber, turnOn) {
 	  let action = constants.lightCommands.off;

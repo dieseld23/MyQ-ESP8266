@@ -28,7 +28,7 @@ File fsUploadFile;
 Ticker led1tick;
 ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer httpUpdateServer;
-MyQ myq("", myqUsername, myqPassword, "");
+MyQ myq;
 
 
 //+=============================================================================
@@ -400,6 +400,7 @@ void loop() {
 	  Serial.println(myqUsername);
 	myq.login();
 	myq.getDevices();
+	//myq.setDeviceState();
 	delay(300000);
 
 

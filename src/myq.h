@@ -38,27 +38,24 @@ struct routes_t {
 
 class MyQ {
    public:
-	MyQ(String accountId, String username, String password, String securityToken);
+	MyQ();
 	void setLogin(String username, String password);
 	void login();
 	bool checkIsLoggedIn();
 	bool getAccountInfo();
 	void getDevices();
 	const char* getDeviceState(const char *serial_number, const char *attributeName);
-	void getDoorState();
-	void getLightState();
-	void setDeviceState();
-	void setDoorOpen();
-	void setLightState();
+	void getDoorState(const char* serialNumber);
+	void getLightState(const char* serialNumber);
+	void setDeviceState(const char* serialNumber, const char* action);
+	void setDoorOpen(const char* serialNumber, bool open);
+	void setLightState(const char* serialNumber, bool open);
 
 	void getData(String route, String method, String data = "");
 
    protected:
-	String _accountId;
 	String _username;
 	String _password;
-	String _securityToken;
-
    private:
 };
 
